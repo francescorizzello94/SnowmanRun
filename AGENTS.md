@@ -1,23 +1,35 @@
-You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
+# Agent Guidelines (SvelteKit + Threlte)
 
-## Available MCP Tools:
+This project uses SvelteKit and Threlte for a frontend-only 3D game.
 
-### 1. list-sections
+## Documentation & MCP usage
 
-Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
-When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
+- Prefer using the Svelte MCP server to confirm Svelte 5 / SvelteKit APIs when uncertain.
+- Use `list-sections` to locate relevant docs, then `get-documentation` for the needed sections.
+- Use Context7 for Threlte documentation and patterns (scene graph, useFrame, GLTF loading, instancing).
 
-### 2. get-documentation
+## Code quality checks
 
-Retrieves full documentation content for specific sections. Accepts single or multiple sections.
-After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
+- Use `svelte-autofixer` for `.svelte` components before finalizing them.
+- For TypeScript-only modules, ensure types are strict and no unused variables remain.
 
-### 3. svelte-autofixer
+## Project conventions
 
-Analyzes Svelte code and returns issues and suggestions.
-You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
+- Keep game state and systems in `/src/lib/game` (state, spawner, collision, difficulty).
+- Keep Threlte scene components in `/src/lib/scene`.
+- Keep UI overlays in `/src/lib/ui`.
+- Maintain a single authoritative per-frame update loop (avoid multiple competing loops).
 
-### 4. playground-link
+## Performance rules
 
-Generates a Svelte Playground link with the provided code.
-After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+- Avoid recreating meshes every frame.
+- Prefer pooling or instancing for repeated objects (snowballs).
+- Keep allocations out of the per-frame path where possible.
+
+## Deliverables
+
+When implementing features, provide:
+
+- a minimal working baseline first
+- then polish pass (camera, feel, UI)
+- plus a short note on where tuning constants live
