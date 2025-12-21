@@ -24,7 +24,7 @@ const GAME_STATE_KEY = Symbol('game-state');
  * Game State Manager
  * Separates reactive UI state from non-reactive engine state for optimal performance
  */
-class GameStateManager {
+export class GameStateManager {
 	// REACTIVE UI STATE (Svelte $state - for DOM rendering)
 	// Only values that directly affect UI rendering should be reactive
 	state = $state<GameState>('START');
