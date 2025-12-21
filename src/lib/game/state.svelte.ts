@@ -15,7 +15,7 @@ import { DifficultyManager } from './difficulty.svelte';
 import { SnowballSpawner } from './spawner.svelte';
 import { CollisionDetector } from './collision.svelte';
 
-export type GameState = 'START' | 'PLAYING' | 'GAMEOVER';
+export type GameState = 'LOADING' | 'START' | 'PLAYING' | 'GAMEOVER' | 'ERROR';
 
 /**
  * Snowball Data Structure
@@ -48,16 +48,16 @@ export class GameStateManager {
 
 	// REACTIVE UI STATE (Svelte $state - for DOM rendering)
 	// Only values that directly affect UI rendering should be reactive
-	state = $state<GameState>('START');
+	state = $state<GameState>('LOADING');
 	distanceTraveled = $state(0);
 	timePlayed = $state(0);
 	bestScore = $state(0);
+	errorMessage = $state<string | null>(null);
 
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
 	// to minimize main-thread jank. Svelte's $state overhead would cause dropped frames.
 	playerX: number = 0; // Updated every frame via physics loop
-	targetX: number = 0; // Updated every frame via input + friction
 	playerVelocityX: number = 0; // Updated every frame via acceleration
 
 	// Snowball pool - maintained as raw array for O(1) updates
@@ -85,12 +85,23 @@ export class GameStateManager {
 		}
 	}
 
+	setReady() {
+		if (this.state === 'LOADING') {
+			this.state = 'START';
+		}
+	}
+
+	setError(message: string) {
+		this.state = 'ERROR';
+		this.errorMessage = message;
+	}
+
 	startGame() {
+		if (this.state !== 'START') return;
 		this.state = 'PLAYING';
 
 		// Reset engine state
 		this.playerX = 0;
-		this.targetX = 0;
 		this.playerVelocityX = 0;
 		this.snowballs = [];
 		this.nextSnowballId = 1;
