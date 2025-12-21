@@ -5,12 +5,27 @@
  * - Request-safe state isolation via Svelte Context API
  * - Granular reactivity: UI state ($state) vs Engine state (raw)
  * - Performance-optimized with O(1) updates via direct references
+ * - High-frequency updates remain strictly non-reactive (raw properties) to minimize main-thread jank
+ * - Snowball interface treated as plain object for O(1) direct-reference updates within physics loop
+ * - All subsystems scoped to Manager instance to prevent cross-request contamination
  */
 
 import { getContext, setContext } from 'svelte';
+import { DifficultyManager } from './difficulty.svelte';
+import { SnowballSpawner } from './spawner.svelte';
+import { CollisionDetector } from './collision.svelte';
 
 export type GameState = 'START' | 'PLAYING' | 'GAMEOVER';
 
+/**
+ * Snowball Data Structure
+ * 
+ * Specification Compliance:
+ * - Plain object interface (not a class) for minimal overhead
+ * - Enables O(1) direct-reference updates in physics loop (snowball.z += speed * delta)
+ * - All properties are mutable primitives for maximum performance
+ * - No reactive wrappers to avoid main-thread jank during high-frequency updates
+ */
 export interface Snowball {
 	id: number;
 	x: number;
@@ -22,9 +37,15 @@ const GAME_STATE_KEY = Symbol('game-state');
 
 /**
  * Game State Manager
+ * Orchestrator Pattern: Instantiates and manages all subsystems
  * Separates reactive UI state from non-reactive engine state for optimal performance
  */
 export class GameStateManager {
+	// SUBSYSTEMS (Instantiated per game state - SSR-safe)
+	readonly difficulty: DifficultyManager;
+	readonly spawner: SnowballSpawner;
+	readonly collision: CollisionDetector;
+
 	// REACTIVE UI STATE (Svelte $state - for DOM rendering)
 	// Only values that directly affect UI rendering should be reactive
 	state = $state<GameState>('START');
@@ -33,21 +54,28 @@ export class GameStateManager {
 	bestScore = $state(0);
 
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
-	// These are updated every frame and don't need Svelte reactivity overhead
-	playerX: number = 0;
-	targetX: number = 0;
-	playerVelocityX: number = 0;
+	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
+	// to minimize main-thread jank. Svelte's $state overhead would cause dropped frames.
+	playerX: number = 0; // Updated every frame via physics loop
+	targetX: number = 0; // Updated every frame via input + friction
+	playerVelocityX: number = 0; // Updated every frame via acceleration
 
 	// Snowball pool - maintained as raw array for O(1) updates
-	snowballs: Snowball[] = [];
+	// CRITICAL: Direct property updates (snowball.z += delta) avoid array searches
+	snowballs: Snowball[] = []; // Plain objects, not reactive proxies
 	nextSnowballId: number = 1;
 
-	// Timing state
+	// Timing state - non-reactive for performance
 	lastSpawnTime: number = 0;
 	lastLaneIndex: number = -1;
 	sameLaneCount: number = 0;
 
 	constructor() {
+		// Initialize subsystems with dependency injection
+		this.difficulty = new DifficultyManager();
+		this.spawner = new SnowballSpawner(this.difficulty);
+		this.collision = new CollisionDetector();
+
 		// Environment-gated persistent storage access
 		if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
 			const saved = localStorage.getItem('snowman-best-score');
