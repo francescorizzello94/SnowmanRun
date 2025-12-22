@@ -89,7 +89,7 @@
       <!-- Loading state - no visual until ready -->
     {:then gltf}
       <!-- GLTF model loaded successfully -->
-      <T is={gltf.scene} scale={0.5} position.y={0} castShadow />
+      <T is={gltf.scene} scale={0.2} position.y={0.5} castShadow />
     {:catch}
       <!-- Error handled via gameState.setError() - no geometry rendered -->
     {/await}

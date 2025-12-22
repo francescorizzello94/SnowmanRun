@@ -19,7 +19,7 @@ export type GameState = 'LOADING' | 'START' | 'PLAYING' | 'GAMEOVER' | 'ERROR';
 
 /**
  * Snowball Data Structure
- * 
+ *
  * Specification Compliance:
  * - Plain object interface (not a class) for minimal overhead
  * - Enables O(1) direct-reference updates in physics loop (snowball.z += speed * delta)
@@ -97,7 +97,7 @@ export class GameStateManager {
 	}
 
 	startGame() {
-		if (this.state !== 'START') return;
+		if (this.state !== 'START' && this.state !== 'GAMEOVER') return;
 		this.state = 'PLAYING';
 
 		// Reset engine state
