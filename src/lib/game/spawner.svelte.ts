@@ -29,8 +29,9 @@ export class SnowballSpawner {
 	readonly MAX_SCALE = 1.3; // Procedural variation: largest snowball
 	readonly GEOMETRY_VARIANTS = 3; // Number of geometry variations
 
-	// Elite profile weights (sum to 1.0 for weighted random selection)
+	// Elite profile weights for weighted random selection
 	// Distribution: Vortex (30%), Seeker (26%), Fracturer (27%), Heavy (17%)
+	// Note: Sum = 1.00 (0.30 + 0.26 + 0.27 + 0.17)
 	readonly VORTEX_WEIGHT = 0.30;
 	readonly SEEKER_WEIGHT = 0.26;
 	readonly FRACTURER_WEIGHT = 0.27;
