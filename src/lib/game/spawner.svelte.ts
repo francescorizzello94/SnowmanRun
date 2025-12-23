@@ -29,6 +29,47 @@ export class SnowballSpawner {
 	readonly MAX_SCALE = 1.3; // Procedural variation: largest snowball
 	readonly GEOMETRY_VARIANTS = 3; // Number of geometry variations
 
+	// Elite profile weights for weighted random selection
+	// Distribution: Vortex (30%), Seeker (26%), Fracturer (27%), Heavy (17%)
+	// Note: Sum = 1.00 (0.30 + 0.26 + 0.27 + 0.17)
+	readonly VORTEX_WEIGHT = 0.30;
+	readonly SEEKER_WEIGHT = 0.26;
+	readonly FRACTURER_WEIGHT = 0.27;
+	readonly HEAVY_WEIGHT = 0.17;
+
+	// Profile-specific tuning parameters
+	// SEEKER: Mid-sized homing snowball that adjusts toward player's position
+	readonly SEEKER_SCALE_BASE = 0.95;
+	readonly SEEKER_SCALE_VARIATION = 0.25;
+	readonly SEEKER_SPEED_MUL = 1.05;
+	readonly SEEKER_HOMING_STRENGTH = 0.68; // Fraction of distance to close toward player
+
+	// FRACTURER: Large slow snowball that splits into two faster fragments
+	readonly FRACTURER_SCALE_BASE = 1.45;
+	readonly FRACTURER_SCALE_VARIATION = 0.35;
+	readonly FRACTURER_SPEED_MUL = 0.7; // Slower to compensate for split
+	readonly FRACTURER_WOBBLE_MUL = 0.85;
+	readonly FRACTURER_HOP_MUL = 0.75;
+	readonly FRACTURER_Z_BASE = -13.0; // Distance before player where split occurs
+	readonly FRACTURER_Z_VARIATION = 4.0;
+
+	// VORTEX: Oscillating snowball that sways side-to-side
+	readonly VORTEX_SCALE_BASE = 0.85;
+	readonly VORTEX_SCALE_VARIATION = 0.35;
+	readonly VORTEX_SPEED_MUL = 0.95;
+	readonly VORTEX_FREQ_BASE = 2.5; // Oscillation frequency
+	readonly VORTEX_FREQ_VARIATION = 1.8;
+	readonly VORTEX_AMP_MAX = 0.95; // Maximum sway amplitude
+	readonly VORTEX_AMP_MARGIN = 0.35; // Safety margin from playable bounds
+
+	// HEAVY: Massive slow boulder with large hitbox
+	readonly HEAVY_SCALE_BASE = 2.35;
+	readonly HEAVY_SCALE_VARIATION = 0.45;
+	readonly HEAVY_SPEED_MUL = 0.55; // Much slower due to size
+	readonly HEAVY_COLLISION_RADIUS_MUL = 2.1; // Occupies ~1.5 lanes
+	readonly HEAVY_WOBBLE_MUL = 0.55;
+	readonly HEAVY_HOP_MUL = 0.18; // Minimal hop for massive object
+
 	// Dependency injection: DifficultyManager instance
 	private difficulty: DifficultyManager;
 
@@ -134,6 +175,103 @@ export class SnowballSpawner {
 		return Math.random() < 0.18 + 0.22 * ramp ? 4 : 3;
 	}
 
+	/**
+	 * Select an elite profile using weighted random selection
+	 */
+	private selectEliteProfile(): SnowballProfile {
+		const r = Math.random();
+		const vortexThreshold = this.VORTEX_WEIGHT;
+		const seekerThreshold = vortexThreshold + this.SEEKER_WEIGHT;
+		const fracturerThreshold = seekerThreshold + this.FRACTURER_WEIGHT;
+
+		if (r < vortexThreshold) return 'VORTEX';
+		if (r < seekerThreshold) return 'SEEKER';
+		if (r < fracturerThreshold) return 'FRACTURER';
+		return 'HEAVY';
+	}
+
+	/**
+	 * Apply profile-specific parameters to snowball
+	 * Centralizes all profile configuration logic
+	 */
+	private applyProfileParams(
+		profile: SnowballProfile,
+		x: number,
+		playerX: number
+	): {
+		scale: number;
+		speedMul: number;
+		collisionRadiusMul: number;
+		wobbleMul: number;
+		hopMul: number;
+		vortexAmp: number;
+		vortexFreq: number;
+		vortexPhase: number;
+		fractureZ: number;
+		adjustedX: number;
+	} {
+		// Default values for STANDARD profile
+		let scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
+		let speedMul = 1.0;
+		let collisionRadiusMul = 1.0;
+		let wobbleMul = 1.0;
+		let hopMul = 1.0;
+		let vortexAmp = 0.0;
+		let vortexFreq = 0.0;
+		let vortexPhase = 0.0;
+		let fractureZ = -12.0;
+		let adjustedX = x;
+
+		if (profile === 'SEEKER') {
+			// Mid-sized, one-time homing adjustment toward player's current X
+			scale = this.SEEKER_SCALE_BASE + Math.random() * this.SEEKER_SCALE_VARIATION;
+			speedMul = this.SEEKER_SPEED_MUL;
+			adjustedX = this.clamp(
+				x + (playerX - x) * this.SEEKER_HOMING_STRENGTH,
+				this.PLAYABLE_WIDTH_MIN,
+				this.PLAYABLE_WIDTH_MAX
+			);
+		} else if (profile === 'FRACTURER') {
+			// Large + slow; splits into fragments near the player
+			scale = this.FRACTURER_SCALE_BASE + Math.random() * this.FRACTURER_SCALE_VARIATION;
+			speedMul = this.FRACTURER_SPEED_MUL;
+			wobbleMul = this.FRACTURER_WOBBLE_MUL;
+			hopMul = this.FRACTURER_HOP_MUL;
+			fractureZ = this.FRACTURER_Z_BASE - Math.random() * this.FRACTURER_Z_VARIATION;
+		} else if (profile === 'VORTEX') {
+			// Oscillating snowball with side-to-side sway
+			scale = this.VORTEX_SCALE_BASE + Math.random() * this.VORTEX_SCALE_VARIATION;
+			speedMul = this.VORTEX_SPEED_MUL;
+			vortexFreq = this.VORTEX_FREQ_BASE + Math.random() * this.VORTEX_FREQ_VARIATION;
+			vortexPhase = Math.random() * Math.PI * 2;
+			// Keep sway within playable bounds
+			const roomLeft = x - this.PLAYABLE_WIDTH_MIN;
+			const roomRight = this.PLAYABLE_WIDTH_MAX - x;
+			const room = Math.max(0.0, Math.min(roomLeft, roomRight) - this.VORTEX_AMP_MARGIN);
+			vortexAmp = Math.min(this.VORTEX_AMP_MAX, room);
+		} else if (profile === 'HEAVY') {
+			// Massive slow boulder with large hitbox
+			scale = this.HEAVY_SCALE_BASE + Math.random() * this.HEAVY_SCALE_VARIATION;
+			speedMul = this.HEAVY_SPEED_MUL;
+			collisionRadiusMul = this.HEAVY_COLLISION_RADIUS_MUL;
+			wobbleMul = this.HEAVY_WOBBLE_MUL;
+			hopMul = this.HEAVY_HOP_MUL;
+		}
+
+		return {
+			scale,
+			speedMul,
+			collisionRadiusMul,
+			wobbleMul,
+			hopMul,
+			vortexAmp,
+			vortexFreq,
+			vortexPhase,
+			fractureZ,
+			adjustedX,
+		};
+	}
+
 	private spawnRow(gameState: GameStateManager, blockedMask: number, zBase: number) {
 		for (let lane = 0; lane < this.LANE_COUNT; lane++) {
 			if ((blockedMask & (1 << lane)) === 0) continue;
@@ -141,93 +279,38 @@ export class SnowballSpawner {
 
 			const centerX = this.laneCenterX(gameState, lane);
 			const jitterX = (Math.random() * 2 - 1) * this.LANE_JITTER_MAX;
-			let x = this.clamp(centerX + jitterX, this.PLAYABLE_WIDTH_MIN, this.PLAYABLE_WIDTH_MAX);
+			const x = this.clamp(centerX + jitterX, this.PLAYABLE_WIDTH_MIN, this.PLAYABLE_WIDTH_MAX);
 			const z = zBase + (Math.random() * 1.2 - 0.6);
 
 			const ramp = Math.min(gameState.timePlayed / 55, 1);
 			const preset = gameState.difficultyPreset;
 			const playerX = gameState.playerX;
 
-			// Elite profile selection (weighted; more elite as time/difficulty increases).
+			// Elite profile selection (weighted; more elite as time/difficulty increases)
 			const eliteRate =
 				preset === 'EASY' ? 0.18 : preset === 'NORMAL' ? 0.3 : preset === 'HARD' ? 0.42 : 0.55;
 			const eliteChance = eliteRate * (0.75 + 0.7 * ramp);
 
-			let profile: SnowballProfile = 'STANDARD';
+			const profile: SnowballProfile = Math.random() < eliteChance 
+				? this.selectEliteProfile() 
+				: 'STANDARD';
 
-			if (Math.random() < eliteChance) {
-				// Weighted selection among elite profiles.
-				const r = Math.random();
-				if (r < 0.3) profile = 'VORTEX';
-				else if (r < 0.56) profile = 'SEEKER';
-				else if (r < 0.83) profile = 'FRACTURER';
-				else profile = 'HEAVY';
-			}
-
-			// Base randomization
-			let scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
-			let speedMul = 1.0;
-			let collisionRadiusMul = 1.0;
-			let wobbleMul = 1.0;
-			let hopMul = 1.0;
-			let vortexAmp = 0.0;
-			let vortexFreq = 0.0;
-			let vortexPhase = 0.0;
-			let fractureZ = -12.0;
-
-			if (profile === 'SEEKER') {
-				// Mid-sized, one-time homing adjustment toward player's current X.
-				scale = 0.95 + Math.random() * 0.25;
-				speedMul = 1.05;
-				const homingStrength = 0.68;
-				x = this.clamp(
-					x + (playerX - x) * homingStrength,
-					this.PLAYABLE_WIDTH_MIN,
-					this.PLAYABLE_WIDTH_MAX
-				);
-			}
-			if (profile === 'FRACTURER') {
-				// Large + slow; splits into fragments near the player.
-				scale = 1.45 + Math.random() * 0.35;
-				speedMul = 0.7;
-				wobbleMul = 0.85;
-				hopMul = 0.75;
-				fractureZ = -13.0 - Math.random() * 4.0;
-			}
-			if (profile === 'VORTEX') {
-				// Slight oscillation to mess with timing.
-				scale = 0.85 + Math.random() * 0.35;
-				speedMul = 0.95;
-				vortexFreq = 2.5 + Math.random() * 1.8;
-				vortexPhase = Math.random() * Math.PI * 2;
-				// Keep sway within playable bounds.
-				const roomLeft = x - this.PLAYABLE_WIDTH_MIN;
-				const roomRight = this.PLAYABLE_WIDTH_MAX - x;
-				const room = Math.max(0.0, Math.min(roomLeft, roomRight) - 0.35);
-				vortexAmp = Math.min(0.95, room);
-			}
-			if (profile === 'HEAVY') {
-				// Massive slow boulder; large hitbox to occupy ~1.5 lanes.
-				scale = 2.35 + Math.random() * 0.45;
-				speedMul = 0.55;
-				collisionRadiusMul = 2.1;
-				wobbleMul = 0.55;
-				hopMul = 0.18;
-			}
+			// Apply profile-specific parameters
+			const params = this.applyProfileParams(profile, x, playerX);
 
 			const rotationY = Math.random() * Math.PI * 2;
 			const geometryVariant = Math.floor(Math.random() * this.GEOMETRY_VARIANTS);
-			gameState.addSnowball(x, z, scale, rotationY, geometryVariant, {
+			gameState.addSnowball(params.adjustedX, z, params.scale, rotationY, geometryVariant, {
 				profile,
-				baseX: x,
-				speedMul,
-				collisionRadiusMul,
-				wobbleMul,
-				hopMul,
-				vortexAmp,
-				vortexFreq,
-				vortexPhase,
-				fractureZ,
+				baseX: params.adjustedX,
+				speedMul: params.speedMul,
+				collisionRadiusMul: params.collisionRadiusMul,
+				wobbleMul: params.wobbleMul,
+				hopMul: params.hopMul,
+				vortexAmp: params.vortexAmp,
+				vortexFreq: params.vortexFreq,
+				vortexPhase: params.vortexPhase,
+				fractureZ: params.fractureZ,
 				hasFractured: false
 			});
 		}
