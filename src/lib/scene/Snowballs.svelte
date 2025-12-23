@@ -49,14 +49,18 @@
   
   const snowBump = createSnowBumpTexture(128);
 
-  // Create PBR snow material
-  const snowMaterial = new THREE.MeshStandardMaterial({
+  // Create PBR snow material (slightly "wet/icy" for crisp highlights)
+  const snowMaterial = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(0.995, 0.995, 1.0),
-    roughness: 0.98,
+    roughness: 0.62,
     metalness: 0.0,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.22,
+    ior: 1.31,
+    reflectivity: 0.35,
     bumpMap: snowBump,
-    bumpScale: 0.04,
-    envMapIntensity: 0.15,
+    bumpScale: 0.03,
+    envMapIntensity: 0.45,
     flatShading: false,
   });
   

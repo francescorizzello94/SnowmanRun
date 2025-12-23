@@ -2,6 +2,7 @@
   import { T, useTask } from '@threlte/core';
   import { useGltf } from '@threlte/extras';
   import { getGameState } from '$lib/game';
+  import * as THREE from 'three';
   
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
@@ -77,17 +78,34 @@
     visualTilt = lerp(visualTilt, targetTilt, 12 * delta);
   });
   
+  function tuneGltfMaterials(root: THREE.Object3D) {
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const material = obj.material;
+      const mats = Array.isArray(material) ? material : [material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhysicalMaterial) {
+          mat.roughness = Math.min(mat.roughness, 0.65);
+          mat.metalness = 0.0;
+          mat.envMapIntensity = Math.max(mat.envMapIntensity ?? 0, 0.35);
+          mat.needsUpdate = true;
+        }
+      }
+    });
+  }
+
   // Load snowman GLTF with explicit lifecycle management
-  const gltfPromise = useGltf('/snowman_scene.gltf');
-  
-  // Track asset loading state
-  gltfPromise
-    .then(() => {
+  const gltfPromise = useGltf('/snowman_scene.gltf')
+    .then((gltf) => {
+      tuneGltfMaterials(gltf.scene);
       gameState.setReady();
+      return gltf;
     })
     .catch((error) => {
       console.error('Failed to load snowman GLTF:', error);
       gameState.setError('Failed to load 3D model. Please refresh the page.');
+      throw error;
     });
 </script>
 
@@ -99,7 +117,7 @@
       <!-- Loading state - no visual until ready -->
     {:then gltf}
       <!-- GLTF model loaded successfully -->
-      <T is={gltf.scene} scale={0.05} position.y={1.5} castShadow />
+			<T is={gltf.scene} scale={0.05} position.y={1.5} castShadow />
     {:catch}
       <!-- Error handled via gameState.setError() - no geometry rendered -->
     {/await}

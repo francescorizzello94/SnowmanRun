@@ -14,7 +14,7 @@
     shadows
   >
     <!-- Black void backdrop -->
-    <T.Color attach="background" args={['#000000']} />
+    <T.Color attach="background" args={['#00111e']} />
     
     <!-- Camera -->
     <Camera />

@@ -27,11 +27,11 @@
 </T.Mesh>
 
 <!-- PRIMARY DIRECTIONAL LIGHT (Sun) -->
-<!-- Warm yellow/orange tint to contrast with cool snow -->
+<!-- Crisp cool-white sun to make snow pop -->
 <T.DirectionalLight 
   position={[15, 20, 10]} 
-  intensity={2.0}
-  color="#fff5e6"
+  intensity={4.8}
+  color="#ffffff"
   castShadow
   shadow.camera.left={-25}
   shadow.camera.right={25}
@@ -46,20 +46,20 @@
 />
 
 <!-- HEMISPHERE LIGHT (Sky/Ground ambient) -->
-<!-- Cool blue sky, warm ground bounce - creates winter atmosphere -->
+<!-- Vibrant sky-blue fill with soft grey ground bounce -->
 <T.HemisphereLight 
-  args={['#b3d4e6', '#e6d4b3', 0.6]}
+  args={['#00aaff', '#c7cbd1', 0.9]}
 />
 
 <!-- AMBIENT FILL (prevents pitch black shadows) -->
-<T.AmbientLight intensity={0.25} color="#cce0ff" />
+<T.AmbientLight intensity={0.18} color="#d8ecff" />
 
 <!-- BACK/RIM LIGHT (silhouette definition) -->
 <T.DirectionalLight 
   position={[-8, 5, -15]} 
-  intensity={0.5} 
+  intensity={0.75} 
   color="#aaccff"
 />
 
 <!-- EXPONENTIAL FOG (winter atmosphere + hides distant geometry) -->
-<T.FogExp2 attach="fog" args={['#000000', 0.02]} />
+<T.FogExp2 attach="fog" args={['#00111e', 0.018]} />

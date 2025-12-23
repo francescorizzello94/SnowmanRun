@@ -34,11 +34,15 @@
   }
 
   // Create PBR snow material matching snowball material
-  const snowGroundMaterial = new THREE.MeshStandardMaterial({
+  const snowGroundMaterial = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(1.0, 1.0, 1.0),
-    roughness: 0.99,
+    roughness: 0.72,
     metalness: 0.0,
-    envMapIntensity: 0.1,
+    clearcoat: 0.7,
+    clearcoatRoughness: 0.3,
+    ior: 1.31,
+    reflectivity: 0.25,
+    envMapIntensity: 0.35,
     flatShading: false,
     side: THREE.FrontSide,
   });
