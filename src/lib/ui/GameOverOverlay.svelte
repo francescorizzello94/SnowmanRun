@@ -36,6 +36,16 @@
           </div>
         {/if}
       </div>
+
+      <div class="final-stats" aria-label="Final statistics">
+        <h2>Final Stats</h2>
+        <div class="stats-grid">
+          <div class="stat-row"><span class="k">Seekers Dodged</span><span class="v">{gameState.dodgedSeekers}</span></div>
+          <div class="stat-row"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
+          <div class="stat-row"><span class="k">Vortex Dodged</span><span class="v">{gameState.dodgedVortex}</span></div>
+          <div class="stat-row"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
+        </div>
+      </div>
       
       <button onclick={handleRestart}>Play Again</button>
     </div>
@@ -104,6 +114,49 @@
     gap: 2rem;
     justify-content: center;
     margin: 2rem 0;
+  }
+
+  .final-stats {
+    margin: 0 auto 1.5rem auto;
+    max-width: 46rem;
+    pointer-events: auto;
+  }
+
+  h2 {
+    margin: 0.5rem 0 0.75rem 0;
+    font-size: 1.35rem;
+    color: #2c5f8d;
+    letter-spacing: 0.5px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem 1.25rem;
+    justify-content: center;
+  }
+
+  .stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(44, 95, 141, 0.08);
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+  }
+
+  .k {
+    color: #5c6f7f;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .v {
+    color: #2c5f8d;
+    font-weight: 900;
+    font-size: 1.2rem;
   }
   
   .score-item {

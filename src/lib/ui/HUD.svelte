@@ -57,6 +57,12 @@
       <div class="hint">Hotkeys: 1–4</div>
     </div>
   </div>
+
+  {#if gameState.milestoneText && gameState.timePlayed < gameState.milestoneExpiresAt}
+    <div class="milestone" aria-live="polite">
+      {gameState.milestoneText}
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -143,5 +149,43 @@
     font-size: 2rem;
     font-weight: bold;
     color: #2c5f8d;
+  }
+
+  .milestone {
+    position: fixed;
+    left: 50%;
+    top: 45%;
+    transform: translate(-50%, -50%);
+    z-index: 50;
+    pointer-events: none;
+    padding: 0.9rem 1.25rem;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #ffffff;
+    font-size: 2.1rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+    animation: milestoneFlash 0.85s ease-out;
+  }
+
+  @keyframes milestoneFlash {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
+    }
+    12% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.04);
+    }
+    70% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
+    }
   }
 </style>

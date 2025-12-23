@@ -371,6 +371,26 @@
     // Update time and distance
     gameState.timePlayed += delta;
     gameState.distanceTraveled += delta * 10;
+
+    // Milestone triggers (non-blocking)
+    // Distance: every 100m
+    const distMilestone = Math.floor(gameState.distanceTraveled / 100) * 100;
+    if (distMilestone >= 100 && distMilestone > gameState.lastDistanceMilestone) {
+      gameState.lastDistanceMilestone = distMilestone;
+      gameState.queueMilestone(`${distMilestone}M REACHED!`);
+    }
+
+    // Time: every 30s -> rank up
+    const RANKS = ['SURVIVOR', 'BLIZZARD WALKER', 'AVALANCHE MASTER'] as const;
+    const timeIndex = Math.floor(gameState.timePlayed / 30);
+    if (timeIndex >= 1 && timeIndex > gameState.lastTimeMilestoneIndex) {
+      gameState.lastTimeMilestoneIndex = timeIndex;
+      const rank = RANKS[Math.min(timeIndex - 1, RANKS.length - 1)];
+      gameState.queueMilestone(`RANK UP: ${rank}`);
+    }
+
+    // Advance queued milestone messages
+    gameState.tickMilestones();
     
     // Spawn new snowballs
     if (spawner.shouldSpawn(gameState)) {
@@ -462,6 +482,7 @@
       // 2. IMMEDIATE CLEANUP - Remove if past player (prevents ghost collisions)
       // This happens BEFORE collision check for balls that have passed
       if (snowball.z > CLEANUP_Z) {
+		gameState.recordDodge(snowball.profile);
         snowballs.splice(i, 1);
         continue; // Skip collision check for removed snowball
       }

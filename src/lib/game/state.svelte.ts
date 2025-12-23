@@ -86,6 +86,17 @@ export class GameStateManager {
 	difficultyPreset = $state<DifficultyPreset>('NORMAL');
 	snowfallEnabled = $state(true);
 
+	// Milestone feedback (reactive, UI-only)
+	// Non-blocking overlay messages for distance/time survival milestones.
+	milestoneText = $state<string | null>(null);
+	milestoneExpiresAt = $state(0);
+
+	// Final stats (reactive, shown on GAMEOVER)
+	dodgedSeekers = $state(0);
+	dodgedFracturers = $state(0);
+	dodgedVortex = $state(0);
+	dodgedHeavies = $state(0);
+
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
 	// to minimize main-thread jank. Svelte's $state overhead would cause dropped frames.
@@ -101,6 +112,11 @@ export class GameStateManager {
 	lastSpawnTime: number = 0;
 	lastLaneIndex: number = -1;
 	sameLaneCount: number = 0;
+
+	// Milestone tracking (non-reactive, driven by the single per-frame loop)
+	lastDistanceMilestone: number = 0;
+	lastTimeMilestoneIndex: number = 0;
+	private milestoneQueue: Array<{ text: string; duration: number }> = [];
 
 	// Spawner runtime state (non-reactive): enables anti-safe-zone logic
 	spawnerLaneShiftX: number = 0;
@@ -152,10 +168,47 @@ export class GameStateManager {
 		this.spawnerLastBlockedTimes = [];
 		this.spawnerLastPressureTime = 0;
 		this.spawnerLastPatternMask = 0;
+		this.lastDistanceMilestone = 0;
+		this.lastTimeMilestoneIndex = 0;
+		this.milestoneQueue = [];
 
 		// Reset reactive UI state
 		this.distanceTraveled = 0;
 		this.timePlayed = 0;
+		this.milestoneText = null;
+		this.milestoneExpiresAt = 0;
+		this.dodgedSeekers = 0;
+		this.dodgedFracturers = 0;
+		this.dodgedVortex = 0;
+		this.dodgedHeavies = 0;
+	}
+
+	queueMilestone(text: string, duration: number = 0.85) {
+		this.milestoneQueue.push({ text, duration });
+		this.tickMilestones();
+	}
+
+	// Called from the authoritative per-frame loop.
+	tickMilestones(now: number = this.timePlayed) {
+		// If one is still active, keep it.
+		if (this.milestoneText && now < this.milestoneExpiresAt) return;
+
+		// Expired: clear and show next if queued.
+		this.milestoneText = null;
+		if (this.milestoneQueue.length === 0) return;
+		const next = this.milestoneQueue.shift();
+		if (!next) return;
+		this.milestoneText = next.text;
+		this.milestoneExpiresAt = now + next.duration;
+	}
+
+	recordDodge(profile: SnowballProfile) {
+		// Keep STANDARD plain and FRAGMENT as a derivative behavior.
+		if (profile === 'STANDARD' || profile === 'FRAGMENT') return;
+		if (profile === 'SEEKER') this.dodgedSeekers += 1;
+		else if (profile === 'FRACTURER') this.dodgedFracturers += 1;
+		else if (profile === 'VORTEX') this.dodgedVortex += 1;
+		else if (profile === 'HEAVY') this.dodgedHeavies += 1;
 	}
 
 	setDifficultyPreset(preset: DifficultyPreset) {
