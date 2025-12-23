@@ -1,22 +1,34 @@
 <script lang="ts">
-  import { T, useTask } from '@threlte/core';
-  import { getGameState } from '$lib/game';
+  import { T } from '@threlte/core';
   import SnowGround from './SnowGround.svelte';
+  import { onDestroy } from 'svelte';
   import * as THREE from 'three';
-  
-  const gameState = getGameState();
-  
-  // Sun light reference for subtle animation
-  let sunLight: THREE.DirectionalLight;
+
+  const surroundMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    side: THREE.DoubleSide,
+  });
+
+  const surroundGeometry = new THREE.PlaneGeometry(260, 260, 1, 1);
+
+  onDestroy(() => {
+    surroundGeometry.dispose();
+    surroundMaterial.dispose();
+  });
 </script>
 
 <!-- Procedural snow ground -->
 <SnowGround />
 
+<!-- Black stage surround (outside lane) -->
+<T.Mesh rotation.x={-Math.PI / 2} position={[0, -2.0, -40]} name="Surround">
+  <T is={surroundGeometry} />
+  <T is={surroundMaterial} />
+</T.Mesh>
+
 <!-- PRIMARY DIRECTIONAL LIGHT (Sun) -->
 <!-- Warm yellow/orange tint to contrast with cool snow -->
 <T.DirectionalLight 
-  bind:ref={sunLight}
   position={[15, 20, 10]} 
   intensity={2.0}
   color="#fff5e6"
@@ -29,7 +41,8 @@
   shadow.camera.far={100}
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
-  shadow.bias={-0.0001}
+  shadow.bias={-0.00005}
+  shadow.normalBias={0.02}
 />
 
 <!-- HEMISPHERE LIGHT (Sky/Ground ambient) -->
@@ -49,4 +62,4 @@
 />
 
 <!-- EXPONENTIAL FOG (winter atmosphere + hides distant geometry) -->
-<T.FogExp2 attach="fog" args={['#dce8f0', 0.025]} />
+<T.FogExp2 attach="fog" args={['#000000', 0.02]} />

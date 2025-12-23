@@ -9,7 +9,7 @@
   // Tuning constants - KINEMATIC MOVEMENT (instant response)
   const MAX_X = 7; // Playable bounds
   const MOVE_SPEED = 12; // Units per second - instant velocity
-  const VISUAL_LERP_SPEED = 18; // How fast visual catches up to logical position
+  const VISUAL_LERP_SPEED = 24; // How fast visual catches up to logical position
   const TILT_AMOUNT = 0.08; // Subtle tilt based on movement direction
   const PLAYER_Z = 0; // Player stays at z=0
   
@@ -49,15 +49,17 @@
   useTask((delta) => {
     // Reset visual position when not playing
     if (gameState.state !== 'PLAYING') {
+      visualX = gameState.playerX;
       visualTilt = 0;
       return;
     }
     
-    // KINEMATIC INPUT: Direct velocity based on input
-    // Note: Negated because camera looks in -Z direction
+    // KINEMATIC INPUT: World-based mapping
+    // Left  => decrease X
+    // Right => increase X
     let inputDirection = 0;
-    if (leftPressed && !rightPressed) inputDirection = 1;  // Left only
-    if (rightPressed && !leftPressed) inputDirection = -1; // Right only
+    if (leftPressed && !rightPressed) inputDirection = -1;  // Left only
+    if (rightPressed && !leftPressed) inputDirection = 1; // Right only
     // If both pressed: inputDirection stays 0 (deadzone)
     
     // Update logical position instantly (used for collision)

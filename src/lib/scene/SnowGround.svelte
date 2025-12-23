@@ -1,13 +1,11 @@
 <script lang="ts">
-  import { T, useTask } from '@threlte/core';
-  import { getGameState } from '$lib/game';
+  import { T } from '@threlte/core';
   import { onDestroy } from 'svelte';
   import * as THREE from 'three';
   
-  const gameState = getGameState();
   
-  // Ground configuration - large enough to extend beyond fog
-  const GROUND_WIDTH = 50;
+  // Ground configuration - lane-sized snow with black surround
+  const GROUND_WIDTH = 15;
   const GROUND_LENGTH = 120;
   const GROUND_SEGMENTS_X = 80;
   const GROUND_SEGMENTS_Z = 150;
@@ -19,27 +17,28 @@
   function getNoiseHeight(x: number, z: number): number {
     // Large rolling drifts
     const drift = 
-      Math.sin(x * 0.15 + z * 0.08) * 0.3 +
-      Math.cos(x * 0.08 - z * 0.12) * 0.25;
+      Math.sin(x * 0.12 + z * 0.07) * 0.10 +
+      Math.cos(x * 0.07 - z * 0.10) * 0.08;
     
     // Medium bumps
     const bumps = 
-      Math.sin(x * 0.5 + z * 0.4) * 0.08 +
-      Math.cos(x * 0.6 - z * 0.35) * 0.06;
+      Math.sin(x * 0.45 + z * 0.38) * 0.025 +
+      Math.cos(x * 0.55 - z * 0.32) * 0.02;
     
     // Fine detail
     const detail = 
-      Math.sin(x * 1.5 + z * 1.2) * 0.02 +
-      Math.cos(x * 1.8 - z * 1.4) * 0.015;
+      Math.sin(x * 1.2 + z * 1.0) * 0.01 +
+      Math.cos(x * 1.4 - z * 1.1) * 0.008;
     
     return drift + bumps + detail;
   }
-  
+
   // Create PBR snow material matching snowball material
   const snowGroundMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0.95, 0.95, 1.0), // Near-white, slight blue
-    roughness: 0.9, // Very rough for diffuse snow
+    color: new THREE.Color(1.0, 1.0, 1.0),
+    roughness: 0.99,
     metalness: 0.0,
+    envMapIntensity: 0.1,
     flatShading: false,
     side: THREE.FrontSide,
   });
@@ -58,21 +57,18 @@
     const x = positions.getX(i);
     const y = positions.getY(i); // This is actually Z in world space after rotation
     
-    const height = getNoiseHeight(x, y);
+    // Keep a crisp lane edge by fading displacement to 0 near the sides.
+    const halfW = GROUND_WIDTH * 0.5;
+    const edgeT = Math.min(Math.abs(x) / halfW, 1);
+    const edgeFalloff = Math.pow(1 - edgeT, 2.2);
+
+    // Keep drifts subtle and avoid deep craters.
+    const raw = getNoiseHeight(x, y) * edgeFalloff;
+    const height = Math.max(-0.10, Math.min(0.10, raw));
     positions.setZ(i, height);
   }
   
   geometry.computeVertexNormals();
-  
-  let mesh: THREE.Mesh;
-  
-  // UV scrolling for movement illusion
-  useTask((delta) => {
-    if (gameState.state === 'PLAYING' && mesh) {
-      // We could scroll UVs here if using a repeating texture
-      // For now, the procedural displacement provides visual interest
-    }
-  });
   
   onDestroy(() => {
     geometry.dispose();
@@ -81,7 +77,7 @@
 </script>
 
 <T.Mesh 
-  bind:ref={mesh}
+  name="SnowGround"
   rotation.x={-Math.PI / 2} 
   position={[0, -0.01, -30]}
   receiveShadow

@@ -5,6 +5,7 @@
   import Environment from './Environment.svelte';
   import Player from './Player.svelte';
   import Snowballs from './Snowballs.svelte';
+  import Snowfall from './Snowfall.svelte';
 </script>
 
 <div class="scene-container">
@@ -12,14 +13,17 @@
     renderMode="always"
     shadows
   >
-    <!-- Scene background color - matches fog for seamless horizon -->
-    <T.Color attach="background" args={['#dce8f0']} />
+    <!-- Black void backdrop -->
+    <T.Color attach="background" args={['#000000']} />
     
     <!-- Camera -->
     <Camera />
     
     <!-- Environment (lights, ground, fog) -->
     <Environment />
+
+    <!-- Snowfall (toggleable) -->
+    <Snowfall />
     
     <!-- Game objects -->
     <Player />

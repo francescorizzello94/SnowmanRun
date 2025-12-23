@@ -11,7 +11,7 @@
  */
 
 import { getContext, setContext } from 'svelte';
-import { DifficultyManager } from './difficulty.svelte';
+import { DifficultyManager, type DifficultyPreset } from './difficulty.svelte';
 import { SnowballSpawner } from './spawner.svelte';
 import { CollisionDetector } from './collision.svelte';
 
@@ -58,6 +58,8 @@ export class GameStateManager {
 	timePlayed = $state(0);
 	bestScore = $state(0);
 	errorMessage = $state<string | null>(null);
+	difficultyPreset = $state<DifficultyPreset>('NORMAL');
+	snowfallEnabled = $state(true);
 
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
@@ -117,6 +119,14 @@ export class GameStateManager {
 		// Reset reactive UI state
 		this.distanceTraveled = 0;
 		this.timePlayed = 0;
+	}
+
+	setDifficultyPreset(preset: DifficultyPreset) {
+		this.difficultyPreset = preset;
+	}
+
+	toggleSnowfall() {
+		this.snowfallEnabled = !this.snowfallEnabled;
 	}
 
 	endGame() {

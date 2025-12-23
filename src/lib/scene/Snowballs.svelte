@@ -21,20 +21,42 @@
   const CLEANUP_Z = 1.5; // Remove snowballs IMMEDIATELY after passing player (was 15!)
   const HIT_STOP_DURATION = 0.12; // 120ms freeze on collision
   const BASE_RADIUS = 0.6; // Base snowball radius for physics
-  const GROUND_OFFSET = 0.05; // Small offset above ground
+  const GROUND_OFFSET = 0.02; // Small offset above ground
+  const RESTING_RADIUS_PAD = 1.10; // Padding to prevent visual sinking for lumpy variants
   
   // Raycaster for ground detection
   const raycaster = new THREE.Raycaster();
   const rayOrigin = new THREE.Vector3();
   const rayDirection = new THREE.Vector3(0, -1, 0);
+
+  function createSnowBumpTexture(size = 128): THREE.DataTexture {
+    const data = new Uint8Array(size * size * 4);
+    for (let i = 0; i < size * size; i++) {
+      const v = 235 + Math.floor(Math.random() * 20);
+      const idx = i * 4;
+      data[idx + 0] = v;
+      data[idx + 1] = v;
+      data[idx + 2] = v;
+      data[idx + 3] = 255;
+    }
+    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 6);
+    tex.needsUpdate = true;
+    return tex;
+  }
   
-  // Create PBR snow material with SSS-like appearance
+  const snowBump = createSnowBumpTexture(128);
+
+  // Create PBR snow material
   const snowMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0.95, 0.95, 1.0),
-    roughness: 0.85,
+    color: new THREE.Color(0.995, 0.995, 1.0),
+    roughness: 0.98,
     metalness: 0.0,
-    emissive: new THREE.Color(0.08, 0.08, 0.12),
-    emissiveIntensity: 0.3,
+    bumpMap: snowBump,
+    bumpScale: 0.04,
+    envMapIntensity: 0.15,
     flatShading: false,
   });
   
@@ -63,10 +85,15 @@
       const ny = y / len;
       const nz = z / len;
       
-      const noise = 
-        Math.sin(nx * 5.3 + seed) * Math.cos(ny * 4.7 + seed) * 0.08 +
-        Math.sin(nz * 7.1 + seed * 2) * Math.cos(nx * 6.3 + seed) * 0.05 +
-        Math.sin((nx + ny) * 9.0 + seed * 3) * 0.03;
+      // Keep the silhouette "lumpy" while avoiding deep inward dents that
+      // make the mesh visually intersect the ground when rolling.
+      let noise = 
+        Math.sin(nx * 5.3 + seed) * Math.cos(ny * 4.7 + seed) * 0.055 +
+        Math.sin(nz * 7.1 + seed * 2) * Math.cos(nx * 6.3 + seed) * 0.035 +
+        Math.sin((nx + ny) * 9.0 + seed * 3) * 0.02;
+
+      // Never dent inward: inward dents are what cause ground clipping when rolling.
+      noise = Math.max(noise, 0);
       
       const newLen = len * (1 + noise);
       positions.setXYZ(i, nx * newLen, ny * newLen, nz * newLen);
@@ -89,12 +116,23 @@
   function findGroundMesh() {
     if (groundMesh) return;
     scene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh && 
-          Math.abs(obj.rotation.x + Math.PI / 2) < 0.01 && 
-          obj.position.y < 0.1) {
+      if (obj instanceof THREE.Mesh && obj.name === 'SnowGround') {
         groundMesh = obj;
       }
     });
+
+    // Fallback for safety if name wasn't set for some reason
+    if (!groundMesh) {
+      scene.traverse((obj) => {
+        if (
+          obj instanceof THREE.Mesh &&
+          Math.abs(obj.rotation.x + Math.PI / 2) < 0.01 &&
+          obj.position.y < 0.1
+        ) {
+          groundMesh = obj;
+        }
+      });
+    }
   }
   
   function getGroundHeight(x: number, z: number): number {
@@ -134,7 +172,7 @@
     gameState.distanceTraveled += delta * 10;
     
     // Spawn new snowballs
-    if (spawner.shouldSpawn(gameState.timePlayed, gameState.lastSpawnTime)) {
+    if (spawner.shouldSpawn(gameState)) {
       spawner.spawn(gameState);
       gameState.lastSpawnTime = gameState.timePlayed;
     }
@@ -143,7 +181,7 @@
     const playerX = gameState.playerX;
     const playerZ = 0;
     
-    const speed = difficulty.getSnowballSpeed(gameState.timePlayed);
+    const speed = difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset);
     const snowballs = gameState.snowballs;
     
     // Process snowballs: update position -> check collision -> cleanup
@@ -158,8 +196,9 @@
       
       // Ground snapping
       const scaledRadius = BASE_RADIUS * snowball.scale;
+      const restingRadius = scaledRadius * RESTING_RADIUS_PAD;
       const groundHeight = getGroundHeight(snowball.x, snowball.z);
-      snowball.groundY = groundHeight + scaledRadius + GROUND_OFFSET;
+      snowball.groundY = groundHeight + restingRadius + GROUND_OFFSET;
       
       // Rolling animation
       const rollDelta = distanceTraveled / scaledRadius;
@@ -186,6 +225,7 @@
   onDestroy(() => {
     stop();
     geometryVariants.forEach(geo => geo.dispose());
+    snowBump.dispose();
     snowMaterial.dispose();
     debugMaterial.dispose();
     debugSphereGeo.dispose();
