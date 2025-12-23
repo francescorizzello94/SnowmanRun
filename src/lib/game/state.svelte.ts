@@ -17,6 +17,8 @@ import { CollisionDetector } from './collision.svelte';
 
 export type GameState = 'LOADING' | 'START' | 'PLAYING' | 'GAMEOVER' | 'ERROR';
 
+export type SnowballProfile = 'STANDARD' | 'SEEKER' | 'FRACTURER' | 'VORTEX' | 'HEAVY' | 'FRAGMENT';
+
 /**
  * Snowball Data Structure
  *
@@ -29,6 +31,7 @@ export type GameState = 'LOADING' | 'START' | 'PLAYING' | 'GAMEOVER' | 'ERROR';
 export interface Snowball {
 	id: number;
 	x: number;
+	baseX: number;
 	z: number;
 	groundY: number; // Terrain-snapped Y position from raycast
 	active: boolean;
@@ -36,6 +39,23 @@ export interface Snowball {
 	rollAngle: number; // Cumulative rotation from simulated rolling
 	rotationY: number; // Visual variation: random rotation on Y axis (facing direction)
 	geometryVariant: number; // 0, 1, or 2 - index into geometry variants array
+	profile: SnowballProfile;
+
+	// Motion and behavior modifiers
+	speedMul: number;
+	collisionRadiusMul: number;
+	wobbleMul: number;
+	hopMul: number;
+
+	// Vortex profile params
+	vortexAmp: number;
+	vortexFreq: number;
+	vortexPhase: number;
+
+	// Fracturer profile params
+	fractureZ: number;
+	hasFractured: boolean;
+
 	// Visual-only motion parameters (kept non-reactive)
 	wobbleOffsetX: number;
 	wobbleOffsetZ: number;
@@ -163,10 +183,30 @@ export class GameStateManager {
 	 * Performance: O(1) array push
 	 * Procedural Variation: Randomizes scale, rotation, and geometry variant
 	 */
-	addSnowball(x: number, z: number, scale: number, rotationY: number, geometryVariant: number) {
+	addSnowball(
+		x: number,
+		z: number,
+		scale: number,
+		rotationY: number,
+		geometryVariant: number,
+		options?: {
+			profile?: SnowballProfile;
+			speedMul?: number;
+			collisionRadiusMul?: number;
+			wobbleMul?: number;
+			hopMul?: number;
+			baseX?: number;
+			vortexAmp?: number;
+			vortexFreq?: number;
+			vortexPhase?: number;
+			fractureZ?: number;
+			hasFractured?: boolean;
+		}
+	) {
 		this.snowballs.push({
 			id: this.nextSnowballId++,
 			x,
+			baseX: options?.baseX ?? x,
 			z,
 			groundY: 0, // Will be set by terrain snapping
 			active: true,
@@ -174,6 +214,16 @@ export class GameStateManager {
 			rollAngle: 0, // Starting rotation
 			rotationY,
 			geometryVariant,
+			profile: options?.profile ?? 'STANDARD',
+			speedMul: options?.speedMul ?? 1.0,
+			collisionRadiusMul: options?.collisionRadiusMul ?? 1.0,
+			wobbleMul: options?.wobbleMul ?? 1.0,
+			hopMul: options?.hopMul ?? 1.0,
+			vortexAmp: options?.vortexAmp ?? 0.0,
+			vortexFreq: options?.vortexFreq ?? 0.0,
+			vortexPhase: options?.vortexPhase ?? 0.0,
+			fractureZ: options?.fractureZ ?? -12.0,
+			hasFractured: options?.hasFractured ?? false,
 			wobbleOffsetX: (Math.random() * 2 - 1) * 0.18,
 			wobbleOffsetZ: (Math.random() * 2 - 1) * 0.14,
 			hopPhase: Math.random() * Math.PI * 2,

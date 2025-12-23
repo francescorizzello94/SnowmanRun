@@ -3,7 +3,7 @@
  * Context-aware, stateless spawning logic with fairness rules
  */
 
-import type { GameStateManager } from './state.svelte';
+import type { GameStateManager, SnowballProfile } from './state.svelte';
 import type { DifficultyManager } from './difficulty.svelte';
 
 /**
@@ -89,11 +89,7 @@ export class SnowballSpawner {
 		return bestLane;
 	}
 
-	private pickWeightedUnique(
-		weights: number[],
-		count: number,
-		excludeMask: number
-	): number[] {
+	private pickWeightedUnique(weights: number[], count: number, excludeMask: number): number[] {
 		const picked: number[] = [];
 		const available = new Array<boolean>(weights.length).fill(true);
 		for (let i = 0; i < weights.length; i++) {
@@ -145,13 +141,95 @@ export class SnowballSpawner {
 
 			const centerX = this.laneCenterX(gameState, lane);
 			const jitterX = (Math.random() * 2 - 1) * this.LANE_JITTER_MAX;
-			const x = this.clamp(centerX + jitterX, this.PLAYABLE_WIDTH_MIN, this.PLAYABLE_WIDTH_MAX);
+			let x = this.clamp(centerX + jitterX, this.PLAYABLE_WIDTH_MIN, this.PLAYABLE_WIDTH_MAX);
 			const z = zBase + (Math.random() * 1.2 - 0.6);
 
-			const scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
+			const ramp = Math.min(gameState.timePlayed / 55, 1);
+			const preset = gameState.difficultyPreset;
+			const playerX = gameState.playerX;
+
+			// Elite profile selection (weighted; more elite as time/difficulty increases).
+			const eliteRate =
+				preset === 'EASY' ? 0.18 : preset === 'NORMAL' ? 0.3 : preset === 'HARD' ? 0.42 : 0.55;
+			const eliteChance = eliteRate * (0.75 + 0.7 * ramp);
+
+			let profile: SnowballProfile = 'STANDARD';
+
+			if (Math.random() < eliteChance) {
+				// Weighted selection among elite profiles.
+				const r = Math.random();
+				if (r < 0.3) profile = 'VORTEX';
+				else if (r < 0.56) profile = 'SEEKER';
+				else if (r < 0.83) profile = 'FRACTURER';
+				else profile = 'HEAVY';
+			}
+
+			// Base randomization
+			let scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
+			let speedMul = 1.0;
+			let collisionRadiusMul = 1.0;
+			let wobbleMul = 1.0;
+			let hopMul = 1.0;
+			let vortexAmp = 0.0;
+			let vortexFreq = 0.0;
+			let vortexPhase = 0.0;
+			let fractureZ = -12.0;
+
+			if (profile === 'SEEKER') {
+				// Mid-sized, one-time homing adjustment toward player's current X.
+				scale = 0.95 + Math.random() * 0.25;
+				speedMul = 1.05;
+				const homingStrength = 0.68;
+				x = this.clamp(
+					x + (playerX - x) * homingStrength,
+					this.PLAYABLE_WIDTH_MIN,
+					this.PLAYABLE_WIDTH_MAX
+				);
+			}
+			if (profile === 'FRACTURER') {
+				// Large + slow; splits into fragments near the player.
+				scale = 1.45 + Math.random() * 0.35;
+				speedMul = 0.7;
+				wobbleMul = 0.85;
+				hopMul = 0.75;
+				fractureZ = -13.0 - Math.random() * 4.0;
+			}
+			if (profile === 'VORTEX') {
+				// Slight oscillation to mess with timing.
+				scale = 0.85 + Math.random() * 0.35;
+				speedMul = 0.95;
+				vortexFreq = 2.5 + Math.random() * 1.8;
+				vortexPhase = Math.random() * Math.PI * 2;
+				// Keep sway within playable bounds.
+				const roomLeft = x - this.PLAYABLE_WIDTH_MIN;
+				const roomRight = this.PLAYABLE_WIDTH_MAX - x;
+				const room = Math.max(0.0, Math.min(roomLeft, roomRight) - 0.35);
+				vortexAmp = Math.min(0.95, room);
+			}
+			if (profile === 'HEAVY') {
+				// Massive slow boulder; large hitbox to occupy ~1.5 lanes.
+				scale = 2.35 + Math.random() * 0.45;
+				speedMul = 0.55;
+				collisionRadiusMul = 2.1;
+				wobbleMul = 0.55;
+				hopMul = 0.18;
+			}
+
 			const rotationY = Math.random() * Math.PI * 2;
 			const geometryVariant = Math.floor(Math.random() * this.GEOMETRY_VARIANTS);
-			gameState.addSnowball(x, z, scale, rotationY, geometryVariant);
+			gameState.addSnowball(x, z, scale, rotationY, geometryVariant, {
+				profile,
+				baseX: x,
+				speedMul,
+				collisionRadiusMul,
+				wobbleMul,
+				hopMul,
+				vortexAmp,
+				vortexFreq,
+				vortexPhase,
+				fractureZ,
+				hasFractured: false
+			});
 		}
 	}
 
@@ -169,13 +247,7 @@ export class SnowballSpawner {
 
 		// Pattern selection: occasionally spawn staggered "walls" to force lateral movement.
 		const baseStaggerChance =
-			preset === 'EASY'
-				? 0.05
-				: preset === 'NORMAL'
-					? 0.11
-					: preset === 'HARD'
-						? 0.16
-						: 0.22;
+			preset === 'EASY' ? 0.05 : preset === 'NORMAL' ? 0.11 : preset === 'HARD' ? 0.16 : 0.22;
 		const staggerChance = baseStaggerChance * (0.7 + 0.6 * ramp);
 
 		if (Math.random() < staggerChance) {
@@ -278,7 +350,8 @@ export class SnowballSpawner {
 		if (blockedMask === (1 << this.LANE_COUNT) - 1) {
 			// Prefer leaving a gap not equal to last lane index (forces weaving).
 			let gapLane = 2;
-			if (gameState.lastLaneIndex >= 0 && gameState.lastLaneIndex !== 2) gapLane = gameState.lastLaneIndex;
+			if (gameState.lastLaneIndex >= 0 && gameState.lastLaneIndex !== 2)
+				gapLane = gameState.lastLaneIndex;
 			blockedMask &= ~(1 << gapLane);
 		}
 

@@ -24,14 +24,15 @@ export class CollisionDetector {
 		playerZ: number,
 		snowballX: number,
 		snowballZ: number,
-		snowballScale: number = 1.0
+		snowballScale: number = 1.0,
+		snowballRadiusMul: number = 1.0
 	): boolean {
 		const dx = playerX - snowballX;
 		const dz = playerZ - snowballZ;
 		const distSq = dx * dx + dz * dz;
 
 		// Visual-physics synchronization: scale affects collision radius
-		const scaledSnowballRadius = this.SNOWBALL_RADIUS * snowballScale;
+		const scaledSnowballRadius = this.SNOWBALL_RADIUS * snowballScale * snowballRadiusMul;
 		const rSum = this.SNOWMAN_RADIUS + scaledSnowballRadius;
 		const rSumSq = rSum * rSum;
 
