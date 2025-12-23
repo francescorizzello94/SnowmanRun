@@ -36,6 +36,11 @@ export interface Snowball {
 	rollAngle: number; // Cumulative rotation from simulated rolling
 	rotationY: number; // Visual variation: random rotation on Y axis (facing direction)
 	geometryVariant: number; // 0, 1, or 2 - index into geometry variants array
+	// Visual-only motion parameters (kept non-reactive)
+	wobbleOffsetX: number;
+	wobbleOffsetZ: number;
+	hopPhase: number;
+	hopFreq: number;
 }
 
 const GAME_STATE_KEY = Symbol('game-state');
@@ -168,7 +173,11 @@ export class GameStateManager {
 			scale,
 			rollAngle: 0, // Starting rotation
 			rotationY,
-			geometryVariant
+			geometryVariant,
+			wobbleOffsetX: (Math.random() * 2 - 1) * 0.18,
+			wobbleOffsetZ: (Math.random() * 2 - 1) * 0.14,
+			hopPhase: Math.random() * Math.PI * 2,
+			hopFreq: 7.0 + Math.random() * 7.0
 		});
 	}
 

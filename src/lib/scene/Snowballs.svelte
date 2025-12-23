@@ -20,9 +20,9 @@
   // Tuning constants
   const CLEANUP_Z = 1.5; // Remove snowballs IMMEDIATELY after passing player (was 15!)
   const HIT_STOP_DURATION = 0.12; // 120ms freeze on collision
-  const BASE_RADIUS = 0.6; // Base snowball radius for physics
   const GROUND_OFFSET = 0.02; // Small offset above ground
-  const RESTING_RADIUS_PAD = 1.10; // Padding to prevent visual sinking for lumpy variants
+  const WOBBLE_TILT = 0.06; // Small extra wobble tilt on top of pivot offset
+  const SKITTER_MAX_HOP = 0.07; // Vertical hop amplitude (scaled by snowball scale)
   
   // Raycaster for ground detection
   const raycaster = new THREE.Raycaster();
@@ -49,20 +49,45 @@
   
   const snowBump = createSnowBumpTexture(128);
 
-  // Create PBR snow material (slightly "wet/icy" for crisp highlights)
+  // Crystalline PBR snow: bright white, high roughness, subtle pale-blue edge glow.
   const snowMaterial = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(0.995, 0.995, 1.0),
-    roughness: 0.62,
+    color: new THREE.Color('#ffffff'),
+    roughness: 0.94,
     metalness: 0.0,
-    clearcoat: 0.85,
-    clearcoatRoughness: 0.22,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.55,
     ior: 1.31,
-    reflectivity: 0.35,
+    reflectivity: 0.12,
     bumpMap: snowBump,
-    bumpScale: 0.03,
-    envMapIntensity: 0.45,
+    bumpScale: 0.022,
+    envMapIntensity: 0.25,
+    emissive: new THREE.Color('#a9dcff'),
+    emissiveIntensity: 0.0,
     flatShading: false,
   });
+
+  // Fresnel-like emissive tint at edges to mimic soft subsurface scattering.
+  // Implemented via onBeforeCompile to keep MeshPhysicalMaterial lighting model.
+  snowMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uEdgeColor = { value: new THREE.Color('#a9dcff') };
+    shader.uniforms.uEdgePower = { value: 3.0 };
+    shader.uniforms.uEdgeIntensity = { value: 0.18 };
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+         float edgeF = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), uEdgePower);
+         totalEmissiveRadiance += uEdgeColor * (edgeF * uEdgeIntensity);`
+      )
+      .replace(
+        'uniform vec3 emissive;',
+        `uniform vec3 emissive;
+         uniform vec3 uEdgeColor;
+         uniform float uEdgePower;
+         uniform float uEdgeIntensity;`
+      );
+  };
   
   // Debug wireframe material
   const debugMaterial = new THREE.MeshBasicMaterial({
@@ -74,42 +99,137 @@
   
   // Create geometry variants (lumpy spheres for hand-packed snow look)
   const geometryVariants: THREE.BufferGeometry[] = [];
-  
-  function createLumpyGeometry(detail: number, seed: number): THREE.BufferGeometry {
-    const geo = new THREE.IcosahedronGeometry(BASE_RADIUS, detail);
-    const positions = geo.attributes.position;
-    
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      const z = positions.getZ(i);
-      
-      const len = Math.sqrt(x * x + y * y + z * z);
-      const nx = x / len;
-      const ny = y / len;
-      const nz = z / len;
-      
-      // Keep the silhouette "lumpy" while avoiding deep inward dents that
-      // make the mesh visually intersect the ground when rolling.
-      let noise = 
-        Math.sin(nx * 5.3 + seed) * Math.cos(ny * 4.7 + seed) * 0.055 +
-        Math.sin(nz * 7.1 + seed * 2) * Math.cos(nx * 6.3 + seed) * 0.035 +
-        Math.sin((nx + ny) * 9.0 + seed * 3) * 0.02;
+  const geometryBottomOffsets: number[] = [];
+  const geometryRadii: number[] = [];
 
-      // Never dent inward: inward dents are what cause ground clipping when rolling.
-      noise = Math.max(noise, 0);
-      
-      const newLen = len * (1 + noise);
+  function smoothstep(edge0: number, edge1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+
+  function fract(x: number): number {
+    return x - Math.floor(x);
+  }
+
+  function hash1(n: number): number {
+    return fract(Math.sin(n) * 43758.5453123);
+  }
+
+  function hash3(ix: number, iy: number, iz: number, seed: number): [number, number, number] {
+    const n = ix * 127.1 + iy * 311.7 + iz * 74.7 + seed * 19.19;
+    const a = hash1(n);
+    const b = hash1(n + 13.13);
+    const c = hash1(n + 29.79);
+    return [a, b, c];
+  }
+
+  function applyVoronoiDisplacement(
+    geo: THREE.BufferGeometry,
+    seed: number,
+    frequency: number,
+    clumpAmp: number,
+    ridgeAmp: number
+  ) {
+    const positions = geo.attributes.position as THREE.BufferAttribute;
+
+    for (let i = 0; i < positions.count; i++) {
+      const x0 = positions.getX(i);
+      const y0 = positions.getY(i);
+      const z0 = positions.getZ(i);
+
+      // Use normalized direction so displacement is radial.
+      const len = Math.sqrt(x0 * x0 + y0 * y0 + z0 * z0) || 1;
+      const nx = x0 / len;
+      const ny = y0 / len;
+      const nz = z0 / len;
+
+      // Voronoi on a scaled space.
+      const px = nx * frequency;
+      const py = ny * frequency;
+      const pz = nz * frequency;
+
+      const cx = Math.floor(px);
+      const cy = Math.floor(py);
+      const cz = Math.floor(pz);
+
+      let d1 = Infinity;
+      let d2 = Infinity;
+
+      for (let ox = -1; ox <= 1; ox++) {
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let oz = -1; oz <= 1; oz++) {
+            const ix = cx + ox;
+            const iy = cy + oy;
+            const iz = cz + oz;
+            const [rx, ry, rz] = hash3(ix, iy, iz, seed);
+
+            // Feature point inside cell.
+            const fx = ix + rx;
+            const fy = iy + ry;
+            const fz = iz + rz;
+
+            const dx = fx - px;
+            const dy = fy - py;
+            const dz = fz - pz;
+            const dist2 = dx * dx + dy * dy + dz * dz;
+
+            if (dist2 < d1) {
+              d2 = d1;
+              d1 = dist2;
+            } else if (dist2 < d2) {
+              d2 = dist2;
+            }
+          }
+        }
+      }
+
+      const dist1 = Math.sqrt(d1);
+      const dist2 = Math.sqrt(d2);
+
+      // Flattened clumps near cell centers.
+      const clump = 1.0 - smoothstep(0.18, 0.44, dist1);
+      const clumpRamp = smoothstep(0.15, 0.95, clump);
+
+      // Sharp ridges near boundaries (F2 - F1).
+      const ridge = Math.max(0, Math.min(1, (dist2 - dist1) * 3.4));
+      const ridgeRamp = smoothstep(0.10, 0.55, ridge);
+
+      // Outward-only displacement (no inward dents).
+      const disp = clumpRamp * clumpAmp + ridgeRamp * ridgeAmp;
+      const newLen = len * (1 + disp);
       positions.setXYZ(i, nx * newLen, ny * newLen, nz * newLen);
     }
-    
+
     geo.computeVertexNormals();
-    return geo;
+    geo.computeBoundingSphere();
   }
   
-  geometryVariants.push(createLumpyGeometry(2, 1.0));
-  geometryVariants.push(createLumpyGeometry(2, 2.5));
-  geometryVariants.push(createLumpyGeometry(2, 4.2));
+  function createAvalancheGeometry(seed: number): THREE.BufferGeometry {
+    // Procedural Icosphere generation (detail level 4)
+    const geo = new THREE.IcosahedronGeometry(0.6, 4);
+
+    // Voronoi displacement + smoothstep ramps to form clumps and ridges.
+    applyVoronoiDisplacement(geo, seed, 3.25, 0.06, 0.095);
+
+    // Cache bottom offset (for perfect ground anchoring) and radius (for roll sync).
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    let minY = Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      if (y < minY) minY = y;
+    }
+
+    const bottom = -minY; // distance from origin to bottom-most vertex
+    geometryBottomOffsets.push(bottom);
+
+    const r = geo.boundingSphere?.radius ?? 0.6;
+    geometryRadii.push(r);
+    return geo;
+  }
+
+  geometryVariants.push(createAvalancheGeometry(1.0));
+  geometryVariants.push(createAvalancheGeometry(2.3));
+  geometryVariants.push(createAvalancheGeometry(4.7));
   
   // Debug geometry for collision visualization
   const debugSphereGeo = new THREE.SphereGeometry(1, 12, 12);
@@ -198,14 +318,20 @@
       const distanceTraveled = speed * delta;
       snowball.z += distanceTraveled;
       
-      // Ground snapping
-      const scaledRadius = BASE_RADIUS * snowball.scale;
-      const restingRadius = scaledRadius * RESTING_RADIUS_PAD;
+      // Ground anchoring: bottom edge touches the lane surface regardless of scale.
+      const variant = snowball.geometryVariant;
+      const bottom = (geometryBottomOffsets[variant] ?? 0.6) * snowball.scale;
       const groundHeight = getGroundHeight(snowball.x, snowball.z);
-      snowball.groundY = groundHeight + restingRadius + GROUND_OFFSET;
+
+      // Skitter motion: tiny vertical hops (always positive) as it travels.
+      const hopWave = Math.sin(gameState.timePlayed * snowball.hopFreq + snowball.hopPhase);
+      const hop = Math.pow(Math.max(0, hopWave), 6) * SKITTER_MAX_HOP * snowball.scale;
+
+      snowball.groundY = groundHeight + bottom + GROUND_OFFSET + hop;
       
-      // Rolling animation
-      const rollDelta = distanceTraveled / scaledRadius;
+      // Synchronized rotation: ΔAngle = ΔDistance / Radius
+      const radius = (geometryRadii[variant] ?? 0.6) * snowball.scale;
+      const rollDelta = distanceTraveled / Math.max(0.0001, radius);
       snowball.rollAngle += rollDelta;
       
       // 2. IMMEDIATE CLEANUP - Remove if past player (prevents ghost collisions)
@@ -239,16 +365,22 @@
 <!-- Snowball visuals -->
 {#each gameState.snowballs as snowball (snowball.id)}
   {#if snowball.active}
-    <T.Mesh 
-      position={[snowball.x, snowball.groundY, snowball.z]} 
-      rotation={[snowball.rollAngle, snowball.rotationY, 0]}
-      scale={[snowball.scale, snowball.scale, snowball.scale]}
-      castShadow
-      receiveShadow
+    {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT}
+    <!-- Organic wobble: pivot offset via Group+Mesh offset -->
+    <T.Group
+      position={[snowball.x, snowball.groundY, snowball.z]}
+      rotation={[snowball.rollAngle, snowball.rotationY, wobbleTilt]}
     >
-      <T is={geometryVariants[snowball.geometryVariant]} />
-      <T is={snowMaterial} />
-    </T.Mesh>
+      <T.Mesh
+        position={[snowball.wobbleOffsetX * snowball.scale, 0, snowball.wobbleOffsetZ * snowball.scale]}
+        scale={[snowball.scale, snowball.scale, snowball.scale]}
+        castShadow
+        receiveShadow
+      >
+        <T is={geometryVariants[snowball.geometryVariant]} />
+        <T is={snowMaterial} />
+      </T.Mesh>
+    </T.Group>
     
     <!-- Debug hitbox visualization -->
     {#if DEBUG_HITBOXES}
