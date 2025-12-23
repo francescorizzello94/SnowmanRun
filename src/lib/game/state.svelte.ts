@@ -77,6 +77,13 @@ export class GameStateManager {
 	lastLaneIndex: number = -1;
 	sameLaneCount: number = 0;
 
+	// Spawner runtime state (non-reactive): enables anti-safe-zone logic
+	spawnerLaneShiftX: number = 0;
+	spawnerLaneShiftV: number = 0;
+	spawnerLastBlockedTimes: number[] = [];
+	spawnerLastPressureTime: number = 0;
+	spawnerLastPatternMask: number = 0;
+
 	constructor() {
 		// Initialize subsystems with dependency injection
 		this.difficulty = new DifficultyManager();
@@ -115,6 +122,11 @@ export class GameStateManager {
 		this.lastSpawnTime = 0;
 		this.lastLaneIndex = -1;
 		this.sameLaneCount = 0;
+		this.spawnerLaneShiftX = 0;
+		this.spawnerLaneShiftV = 0;
+		this.spawnerLastBlockedTimes = [];
+		this.spawnerLastPressureTime = 0;
+		this.spawnerLastPatternMask = 0;
 
 		// Reset reactive UI state
 		this.distanceTraveled = 0;
