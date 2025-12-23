@@ -24,6 +24,7 @@
   const WOBBLE_TILT = 0.06; // Small extra wobble tilt on top of pivot offset
   const SKITTER_MAX_HOP = 0.07; // Vertical hop amplitude (scaled by snowball scale)
   const FRACTURE_SPLIT_OFFSET = 0.8; // Base X separation for fragments
+  const FRAGMENT_SCALE_RATIO = 0.55; // Scale multiplier for fragment snowballs
   
   // Raycaster for ground detection
   const raycaster = new THREE.Raycaster();
@@ -408,30 +409,31 @@
 
         const splitZ = snowball.z;
         const baseX = snowball.baseX;
-        const fragScale = Math.max(0.55, snowball.scale * 0.55);
+        const fragScale = Math.max(FRAGMENT_SCALE_RATIO, snowball.scale * FRAGMENT_SCALE_RATIO);
         const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * snowball.scale;
 
         // Remove the parent first (keeps loop safe while iterating backwards)
         snowballs.splice(i, 1);
+
+        // Common parameters for fracture fragments
+        const fragmentParams = {
+          profile: 'FRAGMENT' as const,
+          speedMul: 1.35,
+          collisionRadiusMul: 0.95,
+          wobbleMul: 1.15,
+          hopMul: 1.05,
+        };
 
         // Spawn two fragments, slightly diverging
         const leftX = Math.max(-7, Math.min(7, baseX - offset));
         const rightX = Math.max(-7, Math.min(7, baseX + offset));
 
         gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
-          profile: 'FRAGMENT',
-          speedMul: 1.35,
-          collisionRadiusMul: 0.95,
-          wobbleMul: 1.15,
-          hopMul: 1.05,
+          ...fragmentParams,
           baseX: leftX,
         });
         gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
-          profile: 'FRAGMENT',
-          speedMul: 1.35,
-          collisionRadiusMul: 0.95,
-          wobbleMul: 1.15,
-          hopMul: 1.05,
+          ...fragmentParams,
           baseX: rightX,
         });
         continue;
@@ -445,10 +447,10 @@
       // Skitter motion: tiny vertical hops (always positive) as it travels.
       const hopWave = Math.sin(gameState.timePlayed * snowball.hopFreq + snowball.hopPhase);
       const hop =
-			Math.pow(Math.max(0, hopWave), 6) *
-			SKITTER_MAX_HOP *
-			snowball.scale *
-			(snowball.hopMul ?? 1.0);
+        Math.pow(Math.max(0, hopWave), 6) *
+        SKITTER_MAX_HOP *
+        snowball.scale *
+        (snowball.hopMul ?? 1.0);
 
       snowball.groundY = groundHeight + bottom + GROUND_OFFSET + hop;
       
@@ -468,13 +470,13 @@
       // Check collision only when snowball is in the danger zone
       if (snowball.z >= -1.5 && snowball.z <= CLEANUP_Z) {
         if (collision.checkCollision(
-			playerX,
-			playerZ,
-			snowball.x,
-			snowball.z,
-			snowball.scale,
-			snowball.collisionRadiusMul ?? 1.0
-		)) {
+          playerX,
+          playerZ,
+          snowball.x,
+          snowball.z,
+          snowball.scale,
+          snowball.collisionRadiusMul ?? 1.0
+        )) {
           hitStopTimer = HIT_STOP_DURATION;
           return; // Exit immediately on collision
         }
