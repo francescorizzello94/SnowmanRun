@@ -20,7 +20,11 @@
   
   // Visual position (lerped for smooth rendering) - reactive for template binding
   let visualX = $state(0);
+  let visualY = $state(0);
   let visualTilt = $state(0);
+
+  // Non-reactive vertical velocity for smooth jump/land
+  let yVel = 0;
   
   // Handle keyboard input
   function handleKeyDown(e: KeyboardEvent) {
@@ -30,6 +34,17 @@
       leftPressed = true;
     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
       rightPressed = true;
+    } else if (e.key === ' ' || e.code === 'Space') {
+      gameState.tryStartJump();
+    } else if (e.key === 'ArrowUp') {
+      gameState.tryStartJump();
+    } else if (e.key === 'ArrowDown') {
+      gameState.cancelJump();
+      // Immediate drop to ground on demand.
+      visualY = 0;
+      yVel = 0;
+    } else if (e.key === 'x' || e.key === 'X') {
+      gameState.tryActivateFrostBurst(gameState.playerX, PLAYER_Z);
     }
   }
   
@@ -51,6 +66,7 @@
     // Reset visual position when not playing
     if (gameState.state !== 'PLAYING') {
       visualX = gameState.playerX;
+      visualY = 0;
       visualTilt = 0;
       return;
     }
@@ -72,6 +88,24 @@
     
     // VISUAL SMOOTHING: Lerp visual position toward logical position
     visualX = lerp(visualX, gameState.playerX, VISUAL_LERP_SPEED * delta);
+
+    // Jump arc (visual only; collision gating handled via gameState jump timers)
+    const now = gameState.timePlayed;
+    let targetY = 0;
+    if (now >= gameState.jumpStartTime && now < gameState.jumpEndTime) {
+      const dur = Math.max(0.001, gameState.jumpEndTime - gameState.jumpStartTime);
+      const t = (now - gameState.jumpStartTime) / dur;
+      const JUMP_HEIGHT = 1.3;
+      targetY = 4 * JUMP_HEIGHT * t * (1 - t);
+    }
+
+    // Springy smoothing for confidence + better landing feel.
+    // Faster on the way down to avoid floaty landings.
+    const stiffness = targetY > visualY ? 160 : 240;
+    const damping = 20;
+    yVel += (targetY - visualY) * stiffness * delta;
+    yVel *= Math.exp(-damping * delta);
+    visualY = Math.max(0, visualY + yVel * delta);
     
     // Tilt based on movement direction (not velocity magnitude)
     const targetTilt = -inputDirection * TILT_AMOUNT;
@@ -112,7 +146,7 @@
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
 {#if gameState.state !== 'ERROR'}
-  <T.Group position={[visualX, 0, PLAYER_Z]} rotation.z={visualTilt}>
+  <T.Group position={[visualX, visualY, PLAYER_Z]} rotation.z={visualTilt}>
     {#await gltfPromise}
       <!-- Loading state - no visual until ready -->
     {:then gltf}

@@ -490,6 +490,14 @@
       // 3. SYNCHRONOUS COLLISION CHECK - Only for snowballs in front of or at player
       // Check collision only when snowball is in the danger zone
       if (snowball.z >= -1.5 && snowball.z <= CLEANUP_Z) {
+        const now = gameState.timePlayed;
+        const jumpingNow = now >= gameState.jumpInvulnStartTime && now < gameState.jumpInvulnEndTime;
+        // Jump disables collision for standard-sized snowballs, but NOT for "Heavies".
+        // Collision is X/Z only, so the jump must be handled as a gameplay gate here.
+        if (jumpingNow && snowball.profile !== 'HEAVY') {
+          continue;
+        }
+
         if (collision.checkCollision(
           playerX,
           playerZ,
