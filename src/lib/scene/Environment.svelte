@@ -1,29 +1,52 @@
 <script lang="ts">
-  import { T } from '@threlte/core';
+  import { T, useTask } from '@threlte/core';
+  import { getGameState } from '$lib/game';
+  import SnowGround from './SnowGround.svelte';
+  import * as THREE from 'three';
+  
+  const gameState = getGameState();
+  
+  // Sun light reference for subtle animation
+  let sunLight: THREE.DirectionalLight;
 </script>
 
-<!-- Ground plane -->
-<T.Mesh rotation.x={-Math.PI / 2} receiveShadow position.y={-0.01}>
-  <T.PlaneGeometry args={[200, 200]} />
-  <T.MeshStandardMaterial color="#ffffff" roughness={0.7} metalness={0} />
-</T.Mesh>
+<!-- Procedural snow ground -->
+<SnowGround />
 
-<!-- Lighting -->
-<T.AmbientLight intensity={0.8} />
+<!-- PRIMARY DIRECTIONAL LIGHT (Sun) -->
+<!-- Warm yellow/orange tint to contrast with cool snow -->
 <T.DirectionalLight 
-  position={[10, 15, 5]} 
-  intensity={1.5} 
+  bind:ref={sunLight}
+  position={[15, 20, 10]} 
+  intensity={2.0}
+  color="#fff5e6"
   castShadow
-  shadow.camera.left={-20}
-  shadow.camera.right={20}
-  shadow.camera.top={20}
-  shadow.camera.bottom={-20}
+  shadow.camera.left={-25}
+  shadow.camera.right={25}
+  shadow.camera.top={25}
+  shadow.camera.bottom={-25}
+  shadow.camera.near={0.1}
+  shadow.camera.far={100}
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
+  shadow.bias={-0.0001}
 />
 
-<!-- Rim light for better readability -->
-<T.DirectionalLight position={[-5, 3, -10]} intensity={0.4} color="#b3d9ff" />
+<!-- HEMISPHERE LIGHT (Sky/Ground ambient) -->
+<!-- Cool blue sky, warm ground bounce - creates winter atmosphere -->
+<T.HemisphereLight 
+  args={['#b3d4e6', '#e6d4b3', 0.6]}
+/>
 
-<!-- Fog for depth -->
-<T.Fog attach="fog" args={['#e8f4f8', 30, 80]} />
+<!-- AMBIENT FILL (prevents pitch black shadows) -->
+<T.AmbientLight intensity={0.25} color="#cce0ff" />
+
+<!-- BACK/RIM LIGHT (silhouette definition) -->
+<T.DirectionalLight 
+  position={[-8, 5, -15]} 
+  intensity={0.5} 
+  color="#aaccff"
+/>
+
+<!-- EXPONENTIAL FOG (winter atmosphere + hides distant geometry) -->
+<T.FogExp2 attach="fog" args={['#dce8f0', 0.025]} />

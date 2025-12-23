@@ -10,9 +10,10 @@
 <div class="scene-container">
   <Canvas 
     renderMode="always"
+    shadows
   >
-    <!-- Scene background color -->
-    <T.Color attach="background" args={['#e8f4f8']} />
+    <!-- Scene background color - matches fog for seamless horizon -->
+    <T.Color attach="background" args={['#dce8f0']} />
     
     <!-- Camera -->
     <Camera />
@@ -20,7 +21,7 @@
     <!-- Environment (lights, ground, fog) -->
     <Environment />
     
-    <!-- Game objects -->\
+    <!-- Game objects -->
     <Player />
     <Snowballs />
   </Canvas>

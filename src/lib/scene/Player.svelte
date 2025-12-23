@@ -1,25 +1,25 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
   import { useGltf } from '@threlte/extras';
-  import { Spring } from 'svelte/motion';
   import { getGameState } from '$lib/game';
   
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
   
-  // Tuning constants
-  const MAX_X = 6;
-  const ACCELERATION = 50; // was 40 - more responsive
-  const FRICTION = 0.88; // was 0.85 - slightly less slippery
-  const TILT_AMOUNT = 0.15;
+  // Tuning constants - KINEMATIC MOVEMENT (instant response)
+  const MAX_X = 7; // Playable bounds
+  const MOVE_SPEED = 12; // Units per second - instant velocity
+  const VISUAL_LERP_SPEED = 18; // How fast visual catches up to logical position
+  const TILT_AMOUNT = 0.08; // Subtle tilt based on movement direction
   const PLAYER_Z = 0; // Player stays at z=0
   
   // Input tracking
   let leftPressed = $state(false);
   let rightPressed = $state(false);
   
-  // Visual-only spring for tilt animation (does not affect collision)
-  const tiltSpring = new Spring(0, { stiffness: 0.15, damping: 0.6 });
+  // Visual position (lerped for smooth rendering) - reactive for template binding
+  let visualX = $state(0);
+  let visualTilt = $state(0);
   
   // Handle keyboard input
   function handleKeyDown(e: KeyboardEvent) {
@@ -40,31 +40,39 @@
     }
   }
   
-  // Update physics in useTask
+  // Linear interpolation helper
+  function lerp(current: number, target: number, t: number): number {
+    return current + (target - current) * Math.min(t, 1);
+  }
+  
+  // Update player position in useTask
   useTask((delta) => {
-    // CRITICAL: Only update physics during gameplay AND when assets are loaded
-    // This prevents invisible hitbox issues if model fails to load
+    // Reset visual position when not playing
     if (gameState.state !== 'PLAYING') {
-      tiltSpring.target = 0;
+      visualTilt = 0;
       return;
     }
     
-    // Calculate input direction
-    let input = 0;
-    if (leftPressed) input -= 1;
-    if (rightPressed) input += 1;
+    // KINEMATIC INPUT: Direct velocity based on input
+    // Note: Negated because camera looks in -Z direction
+    let inputDirection = 0;
+    if (leftPressed && !rightPressed) inputDirection = 1;  // Left only
+    if (rightPressed && !leftPressed) inputDirection = -1; // Right only
+    // If both pressed: inputDirection stays 0 (deadzone)
     
-    // Apply acceleration and friction (single-source physics)
-    gameState.playerVelocityX += input * ACCELERATION * delta;
-    gameState.playerVelocityX *= FRICTION;
-    
-    // Update position directly from velocity (no spring latency)
-    gameState.playerX += gameState.playerVelocityX * delta;
+    // Update logical position instantly (used for collision)
+    gameState.playerX += inputDirection * MOVE_SPEED * delta;
     gameState.playerX = Math.max(-MAX_X, Math.min(MAX_X, gameState.playerX));
     
-    // Update visual-only tilt spring based on velocity
-    const tiltTarget = -gameState.playerVelocityX * TILT_AMOUNT;
-    tiltSpring.target = tiltTarget;
+    // Clear velocity when not moving (no momentum/drift)
+    gameState.playerVelocityX = inputDirection * MOVE_SPEED;
+    
+    // VISUAL SMOOTHING: Lerp visual position toward logical position
+    visualX = lerp(visualX, gameState.playerX, VISUAL_LERP_SPEED * delta);
+    
+    // Tilt based on movement direction (not velocity magnitude)
+    const targetTilt = -inputDirection * TILT_AMOUNT;
+    visualTilt = lerp(visualTilt, targetTilt, 12 * delta);
   });
   
   // Load snowman GLTF with explicit lifecycle management
@@ -81,10 +89,10 @@
     });
 </script>
 
-<svelte:window on:keydown={handleKeyDown} on:keyup={handleKeyUp} />
+<svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
 {#if gameState.state !== 'ERROR'}
-  <T.Group position={[gameState.playerX, 0, PLAYER_Z]} rotation.z={tiltSpring.current}>
+  <T.Group position={[visualX, 0, PLAYER_Z]} rotation.z={visualTilt}>
     {#await gltfPromise}
       <!-- Loading state - no visual until ready -->
     {:then gltf}

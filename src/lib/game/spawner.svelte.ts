@@ -17,9 +17,16 @@ import type { DifficultyManager } from './difficulty.svelte';
  */
 export class SnowballSpawner {
 	// Tuning constants
-	readonly SPAWN_Z = -50; // Spawn far away
-	readonly LANES = [-6, -3, 0, 3, 6]; // 5 discrete lanes
-	readonly MAX_CONSECUTIVE_SAME_LANE = 2; // Fairness: avoid impossible patterns
+	readonly SPAWN_Z = -60; // Spawn far away (outside fog/frustum)
+	readonly PLAYABLE_WIDTH_MIN = -8.0; // Left boundary
+	readonly PLAYABLE_WIDTH_MAX = 8.0; // Right boundary
+	readonly MIN_SCALE = 0.5; // Procedural variation: smallest snowball
+	readonly MAX_SCALE = 1.3; // Procedural variation: largest snowball
+	readonly GEOMETRY_VARIANTS = 3; // Number of geometry variations
+
+	// Fairness tracking
+	private lastSpawnX: number = 0;
+	readonly MIN_SPAWN_DISTANCE = 3.0; // Minimum X distance between consecutive spawns
 
 	// Dependency injection: DifficultyManager instance
 	private difficulty: DifficultyManager;
@@ -29,33 +36,29 @@ export class SnowballSpawner {
 	}
 
 	/**
-	 * Spawn a new snowball using fairness rules
+	 * Spawn a new snowball with full random distribution across playable width
 	 * Mutates gameState directly for O(1) performance
 	 */
 	spawn(gameState: GameStateManager) {
-		// Pick a lane, avoiding too many consecutive in same lane
-		let laneIndex: number;
+		// Generate random X position across full playable width
+		let x: number;
 		let attempts = 0;
 
 		do {
-			laneIndex = Math.floor(Math.random() * this.LANES.length);
+			x =
+				this.PLAYABLE_WIDTH_MIN +
+				Math.random() * (this.PLAYABLE_WIDTH_MAX - this.PLAYABLE_WIDTH_MIN);
 			attempts++;
-		} while (
-			laneIndex === gameState.lastLaneIndex &&
-			gameState.sameLaneCount >= this.MAX_CONSECUTIVE_SAME_LANE &&
-			attempts < 10
-		);
+		} while (Math.abs(x - this.lastSpawnX) < this.MIN_SPAWN_DISTANCE && attempts < 5);
 
-		// Update lane tracking (non-reactive state)
-		if (laneIndex === gameState.lastLaneIndex) {
-			gameState.sameLaneCount++;
-		} else {
-			gameState.sameLaneCount = 1;
-			gameState.lastLaneIndex = laneIndex;
-		}
+		this.lastSpawnX = x;
 
-		const x = this.LANES[laneIndex];
-		gameState.addSnowball(x, this.SPAWN_Z);
+		// Procedural variation: randomize scale, rotation, and geometry
+		const scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
+		const rotationY = Math.random() * Math.PI * 2;
+		const geometryVariant = Math.floor(Math.random() * this.GEOMETRY_VARIANTS);
+
+		gameState.addSnowball(x, this.SPAWN_Z, scale, rotationY, geometryVariant);
 	}
 
 	/**

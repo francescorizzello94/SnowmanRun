@@ -30,7 +30,12 @@ export interface Snowball {
 	id: number;
 	x: number;
 	z: number;
+	groundY: number; // Terrain-snapped Y position from raycast
 	active: boolean;
+	scale: number; // Procedural variation: 0.4 to 1.2
+	rollAngle: number; // Cumulative rotation from simulated rolling
+	rotationY: number; // Visual variation: random rotation on Y axis (facing direction)
+	geometryVariant: number; // 0, 1, or 2 - index into geometry variants array
 }
 
 const GAME_STATE_KEY = Symbol('game-state');
@@ -129,13 +134,19 @@ export class GameStateManager {
 	/**
 	 * Add snowball to pool
 	 * Performance: O(1) array push
+	 * Procedural Variation: Randomizes scale, rotation, and geometry variant
 	 */
-	addSnowball(x: number, z: number) {
+	addSnowball(x: number, z: number, scale: number, rotationY: number, geometryVariant: number) {
 		this.snowballs.push({
 			id: this.nextSnowballId++,
 			x,
 			z,
-			active: true
+			groundY: 0, // Will be set by terrain snapping
+			active: true,
+			scale,
+			rollAngle: 0, // Starting rotation
+			rotationY,
+			geometryVariant
 		});
 	}
 
