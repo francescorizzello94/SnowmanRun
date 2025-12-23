@@ -23,11 +23,88 @@
   const GROUND_OFFSET = 0.02; // Small offset above ground
   const WOBBLE_TILT = 0.06; // Small extra wobble tilt on top of pivot offset
   const SKITTER_MAX_HOP = 0.07; // Vertical hop amplitude (scaled by snowball scale)
+  const FRACTURE_SPLIT_OFFSET = 0.8; // Base X separation for fragments
+  const FRAGMENT_SCALE_RATIO = 0.55; // Scale multiplier for fragment snowballs
   
   // Raycaster for ground detection
   const raycaster = new THREE.Raycaster();
   const rayOrigin = new THREE.Vector3();
   const rayDirection = new THREE.Vector3(0, -1, 0);
+
+  // === PROFILE BADGES (UI cues) ===
+  // Goal: keep STANDARD snowballs plain; add lightweight, readable markers for elite profiles.
+  // Implemented as camera-facing sprites (billboarded) with tiny glyphs.
+  let badgesReady = false;
+  const badgeTextures: THREE.Texture[] = [];
+  const badgeMaterials: Partial<Record<string, THREE.SpriteMaterial>> = {};
+
+  function createBadgeTexture(label: string, colorHex: string): THREE.Texture {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      const data = new Uint8Array([0, 0, 0, 0]);
+      const fallback = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat);
+      fallback.needsUpdate = true;
+      return fallback;
+    }
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Soft dark backing for readability.
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, 26, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fill();
+
+    // Colored ring.
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = colorHex;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, 23, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Center letter.
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 28px system-ui, -apple-system, Segoe UI, Arial';
+    ctx.fillText(label, size / 2, size / 2 + 1);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function initBadges() {
+    if (typeof document === 'undefined') return;
+
+    const defs: Array<[string, string, string]> = [
+      ['SEEKER', 'S', '#ff6a3d'],
+      ['FRACTURER', 'F', '#b07cff'],
+      ['VORTEX', 'V', '#31d3ff'],
+      ['HEAVY', 'H', '#ffd34d'],
+    ];
+
+    for (const [profile, label, color] of defs) {
+      const tex = createBadgeTexture(label, color);
+      badgeTextures.push(tex);
+      badgeMaterials[profile] = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      });
+    }
+
+    badgesReady = true;
+  }
+
+  initBadges();
 
   function createSnowBumpTexture(size = 128): THREE.DataTexture {
     const data = new Uint8Array(size * size * 4);
@@ -315,8 +392,52 @@
       if (!snowball.active) continue;
       
       // 1. UPDATE POSITION
-      const distanceTraveled = speed * delta;
+      const snowballSpeed = speed * (snowball.speedMul ?? 1.0);
+      const distanceTraveled = snowballSpeed * delta;
       snowball.z += distanceTraveled;
+
+      // Profile motion: Vortex sways horizontally (affects collision and ground sampling)
+      if (snowball.profile === 'VORTEX') {
+        snowball.x = snowball.baseX + Math.sin(gameState.timePlayed * snowball.vortexFreq + snowball.vortexPhase) * snowball.vortexAmp;
+      } else {
+        snowball.x = snowball.baseX;
+      }
+
+      // Profile behavior: Fracturer splits into two faster fragments near the player.
+      if (snowball.profile === 'FRACTURER' && !snowball.hasFractured && snowball.z >= snowball.fractureZ) {
+        snowball.hasFractured = true;
+
+        const splitZ = snowball.z;
+        const baseX = snowball.baseX;
+        const fragScale = Math.max(FRAGMENT_SCALE_RATIO, snowball.scale * FRAGMENT_SCALE_RATIO);
+        const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * snowball.scale;
+
+        // Remove the parent first (keeps loop safe while iterating backwards)
+        snowballs.splice(i, 1);
+
+        // Common parameters for fracture fragments
+        const fragmentParams = {
+          profile: 'FRAGMENT' as const,
+          speedMul: 1.35,
+          collisionRadiusMul: 0.95,
+          wobbleMul: 1.15,
+          hopMul: 1.05,
+        };
+
+        // Spawn two fragments, slightly diverging
+        const leftX = Math.max(-7, Math.min(7, baseX - offset));
+        const rightX = Math.max(-7, Math.min(7, baseX + offset));
+
+        gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
+          ...fragmentParams,
+          baseX: leftX,
+        });
+        gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
+          ...fragmentParams,
+          baseX: rightX,
+        });
+        continue;
+      }
       
       // Ground anchoring: bottom edge touches the lane surface regardless of scale.
       const variant = snowball.geometryVariant;
@@ -325,7 +446,11 @@
 
       // Skitter motion: tiny vertical hops (always positive) as it travels.
       const hopWave = Math.sin(gameState.timePlayed * snowball.hopFreq + snowball.hopPhase);
-      const hop = Math.pow(Math.max(0, hopWave), 6) * SKITTER_MAX_HOP * snowball.scale;
+      const hop =
+        Math.pow(Math.max(0, hopWave), 6) *
+        SKITTER_MAX_HOP *
+        snowball.scale *
+        (snowball.hopMul ?? 1.0);
 
       snowball.groundY = groundHeight + bottom + GROUND_OFFSET + hop;
       
@@ -344,7 +469,14 @@
       // 3. SYNCHRONOUS COLLISION CHECK - Only for snowballs in front of or at player
       // Check collision only when snowball is in the danger zone
       if (snowball.z >= -1.5 && snowball.z <= CLEANUP_Z) {
-        if (collision.checkCollision(playerX, playerZ, snowball.x, snowball.z, snowball.scale)) {
+        if (collision.checkCollision(
+          playerX,
+          playerZ,
+          snowball.x,
+          snowball.z,
+          snowball.scale,
+          snowball.collisionRadiusMul ?? 1.0
+        )) {
           hitStopTimer = HIT_STOP_DURATION;
           return; // Exit immediately on collision
         }
@@ -359,20 +491,22 @@
     snowMaterial.dispose();
     debugMaterial.dispose();
     debugSphereGeo.dispose();
+    badgeTextures.forEach((t) => t.dispose());
+    Object.values(badgeMaterials).forEach((m) => m?.dispose());
   });
 </script>
 
 <!-- Snowball visuals -->
 {#each gameState.snowballs as snowball (snowball.id)}
   {#if snowball.active}
-    {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT}
+    {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
     <!-- Organic wobble: pivot offset via Group+Mesh offset -->
     <T.Group
       position={[snowball.x, snowball.groundY, snowball.z]}
       rotation={[snowball.rollAngle, snowball.rotationY, wobbleTilt]}
     >
       <T.Mesh
-        position={[snowball.wobbleOffsetX * snowball.scale, 0, snowball.wobbleOffsetZ * snowball.scale]}
+        position={[snowball.wobbleOffsetX * snowball.scale * (snowball.wobbleMul ?? 1), 0, snowball.wobbleOffsetZ * snowball.scale * (snowball.wobbleMul ?? 1)]}
         scale={[snowball.scale, snowball.scale, snowball.scale]}
         castShadow
         receiveShadow
@@ -381,6 +515,24 @@
         <T is={snowMaterial} />
       </T.Mesh>
     </T.Group>
+
+    {#if badgesReady && snowball.profile !== 'STANDARD' && snowball.profile !== 'FRAGMENT'}
+      {@const badgeMat = badgeMaterials[snowball.profile]}
+      {@const badgeR = (geometryRadii[snowball.geometryVariant] ?? 0.6) * snowball.scale}
+      {@const badgeLift = (snowball.profile === 'HEAVY' ? 0.85 : 0.6) * snowball.scale}
+      {@const badgeSize = (snowball.profile === 'HEAVY' ? 1.15 : 0.9) * snowball.scale}
+
+      {#if badgeMat}
+        <!-- UI badge: camera-facing sprite above the snowball (does not roll). -->
+        <T.Sprite
+          position={[snowball.x, snowball.groundY + badgeR + badgeLift, snowball.z]}
+          scale={[badgeSize, badgeSize, badgeSize]}
+          renderOrder={1000}
+        >
+          <T is={badgeMat} />
+        </T.Sprite>
+      {/if}
+    {/if}
     
     <!-- Debug hitbox visualization -->
     {#if DEBUG_HITBOXES}
