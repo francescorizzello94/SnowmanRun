@@ -3,8 +3,8 @@
   # This tells Netlify where the adapter actually placed the build output
   publish = ".svelte-kit/netlify"
 
-[functions]
-  node_version = "20"
+[build.environment]
+  NODE_VERSION = "20"
 
 [[headers]]
   for = "/_app/immutable/*"
