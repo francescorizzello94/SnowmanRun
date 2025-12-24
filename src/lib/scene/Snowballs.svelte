@@ -165,6 +165,12 @@
          uniform float uEdgeIntensity;`
       );
   };
+
+  // Seeker visual tell: subtle red emissive glow.
+  const seekerMaterial = snowMaterial.clone();
+  seekerMaterial.emissive = new THREE.Color('#ff2b2b');
+  seekerMaterial.emissiveIntensity = 0.22;
+  seekerMaterial.needsUpdate = true;
   
   // Debug wireframe material
   const debugMaterial = new THREE.MeshBasicMaterial({
@@ -404,6 +410,12 @@
     
     const speed = difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset);
     const snowballs = gameState.snowballs;
+
+    // Seeker predictive intercept tuning
+    const SEEKER_LOCK_Z = -15; // lock when within 15 units of player on Z
+    const SEEKER_LEAD_MIN = 0.35;
+    const SEEKER_LEAD_MAX = 0.95;
+    const SEEKER_TURN_RATE = 3.6; // per-second responsiveness
     
     // Process snowballs: update position -> check collision -> cleanup
     // All in same frame, same loop iteration for each snowball
@@ -419,6 +431,25 @@
       // Profile motion: Vortex sways horizontally (affects collision and ground sampling)
       if (snowball.profile === 'VORTEX') {
         snowball.x = snowball.baseX + Math.sin(gameState.timePlayed * snowball.vortexFreq + snowball.vortexPhase) * snowball.vortexAmp;
+      } else if (snowball.profile === 'SEEKER') {
+        // Predictive intercept: aim for where the player will be when the seeker reaches z=0.
+        // Then smoothly steer toward that X until the late-stage lock distance.
+        const locked = snowball.seekerLocked === true;
+        if (!locked && snowball.z >= SEEKER_LOCK_Z) {
+          snowball.seekerLocked = true;
+        }
+
+        if (snowball.seekerLocked !== true) {
+          const toPlayer = Math.max(0.001, 0 - snowball.z);
+          const tToPlayer = toPlayer / Math.max(0.001, snowballSpeed);
+          const leadT = Math.max(SEEKER_LEAD_MIN, Math.min(SEEKER_LEAD_MAX, tToPlayer));
+          const predictedX = Math.max(-7, Math.min(7, playerX + gameState.playerVelocityX * leadT));
+
+          const a = 1 - Math.exp(-SEEKER_TURN_RATE * delta);
+          snowball.baseX = snowball.baseX + (predictedX - snowball.baseX) * a;
+        }
+
+        snowball.x = snowball.baseX;
       } else {
         snowball.x = snowball.baseX;
       }
@@ -529,6 +560,7 @@
     geometryVariants.forEach(geo => geo.dispose());
     snowBump.dispose();
     snowMaterial.dispose();
+    seekerMaterial.dispose();
     debugMaterial.dispose();
     debugSphereGeo.dispose();
     badgeTextures.forEach((t) => t.dispose());

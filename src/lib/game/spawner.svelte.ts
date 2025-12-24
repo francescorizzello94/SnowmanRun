@@ -4,7 +4,7 @@
  */
 
 import type { GameStateManager, SnowballProfile } from './state.svelte';
-import type { DifficultyManager } from './difficulty.svelte';
+import type { DifficultyManager, DifficultyPreset } from './difficulty.svelte';
 
 /**
  * Snowball Spawner System
@@ -171,8 +171,40 @@ export class SnowballSpawner {
 		if (preset === 'EASY') return Math.random() < 0.6 ? 1 : 2;
 		if (preset === 'NORMAL') return Math.random() < 0.35 + 0.25 * ramp ? 3 : 2;
 		if (preset === 'HARD') return Math.random() < 0.6 + 0.2 * ramp ? 3 : 2;
-		// INSANE: frequent 3-lane blocks, occasional 4-lane near-walls (still fair)
-		return Math.random() < 0.18 + 0.22 * ramp ? 4 : 3;
+		// INSANE: cap at 3 blocked lanes to avoid "unavoidable walls"
+		return Math.random() < 0.55 + 0.15 * ramp ? 3 : 2;
+	}
+
+	private selectProfileByPreset(preset: DifficultyPreset): SnowballProfile {
+		// Probability table (explicit):
+		// EASY:    80% Standard, 10% Seeker, 5% Fracturer, 5% Vortex
+		// NORMAL:  50% Standard, 20% Seeker, 15% Fracturer, 15% Vortex
+		// HARD:    25% Standard, 35% Seeker, 20% Fracturer, 20% Vortex
+		// INSANE:  10% Standard, 45% Seeker, 25% Fracturer, 20% Vortex
+		const r = Math.random();
+		if (preset === 'EASY') {
+			if (r < 0.80) return 'STANDARD';
+			if (r < 0.90) return 'SEEKER';
+			if (r < 0.95) return 'FRACTURER';
+			return 'VORTEX';
+		}
+		if (preset === 'HARD') {
+			if (r < 0.25) return 'STANDARD';
+			if (r < 0.60) return 'SEEKER';
+			if (r < 0.80) return 'FRACTURER';
+			return 'VORTEX';
+		}
+		if (preset === 'INSANE') {
+			if (r < 0.10) return 'STANDARD';
+			if (r < 0.55) return 'SEEKER';
+			if (r < 0.80) return 'FRACTURER';
+			return 'VORTEX';
+		}
+		// NORMAL
+		if (r < 0.50) return 'STANDARD';
+		if (r < 0.70) return 'SEEKER';
+		if (r < 0.85) return 'FRACTURER';
+		return 'VORTEX';
 	}
 
 	/**
@@ -286,14 +318,13 @@ export class SnowballSpawner {
 			const preset = gameState.difficultyPreset;
 			const playerX = gameState.playerX;
 
-			// Elite profile selection (weighted; more elite as time/difficulty increases)
-			const eliteRate =
-				preset === 'EASY' ? 0.18 : preset === 'NORMAL' ? 0.3 : preset === 'HARD' ? 0.42 : 0.55;
-			const eliteChance = eliteRate * (0.75 + 0.7 * ramp);
-
-			const profile: SnowballProfile = Math.random() < eliteChance 
-				? this.selectEliteProfile() 
-				: 'STANDARD';
+			// Intelligence-first profile selection (anchored to difficulty)
+			let profile: SnowballProfile = this.selectProfileByPreset(preset);
+			// Slightly increase special density over time (without changing preset identity)
+			if (profile === 'STANDARD' && ramp > 0.4 && Math.random() < 0.22) {
+				profile = this.selectProfileByPreset(preset);
+				if (profile === 'STANDARD') profile = 'SEEKER';
+			}
 
 			// Apply profile-specific parameters
 			const params = this.applyProfileParams(profile, x, playerX);
@@ -311,7 +342,8 @@ export class SnowballSpawner {
 				vortexFreq: params.vortexFreq,
 				vortexPhase: params.vortexPhase,
 				fractureZ: params.fractureZ,
-				hasFractured: false
+				hasFractured: false,
+				seekerLocked: false
 			});
 		}
 	}

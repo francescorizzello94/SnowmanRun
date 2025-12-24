@@ -60,6 +60,9 @@ export interface Snowball {
 	fractureZ: number;
 	hasFractured: boolean;
 
+	// Seeker profile params
+	seekerLocked?: boolean;
+
 	// Visual-only motion parameters (kept non-reactive)
 	wobbleOffsetX: number;
 	wobbleOffsetZ: number;
@@ -364,6 +367,7 @@ export class GameStateManager {
 			vortexPhase?: number;
 			fractureZ?: number;
 			hasFractured?: boolean;
+			seekerLocked?: boolean;
 		}
 	) {
 		this.snowballs.push({
