@@ -25,13 +25,15 @@
 
 {#if gameState.state === 'PLAYING'}
   <div class="hud">
-    <div class="stat">
-      <span class="label">Distance</span>
-      <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
-    </div>
-    <div class="stat">
-      <span class="label">Time</span>
-      <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
+    <div class="stat stat-stack" aria-label="Run stats">
+      <div class="metric">
+        <span class="label">Distance</span>
+        <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
+      </div>
+      <div class="metric">
+        <span class="label">Time</span>
+        <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
+      </div>
     </div>
 
     <div class="controls" aria-label="Difficulty and snow controls">
@@ -68,11 +70,12 @@
 <style>
   .hud {
     position: fixed;
-    top: 2rem;
+    top: 1rem;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) scale(0.85);
+    transform-origin: top center;
     display: flex;
-    gap: 3rem;
+    gap: 1.25rem;
     pointer-events: none;
     z-index: 10;
   }
@@ -82,21 +85,36 @@
     flex-direction: column;
     align-items: center;
     background: rgba(255, 255, 255, 0.9);
-    padding: 1rem 2rem;
+    padding: 0.55rem 1.1rem;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 7.5rem;
+  }
+
+  .stat-stack {
+    align-items: stretch;
+    justify-content: space-between;
+    min-width: 9rem;
+    min-height: 6.4rem;
+  }
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
   }
 
   .controls {
     pointer-events: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.6rem;
     background: rgba(255, 255, 255, 0.9);
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 0.9rem;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    min-width: 22rem;
+    min-width: 18rem;
   }
 
   .control-row {
@@ -114,10 +132,10 @@
   button {
     border: 1px solid rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.95);
-    padding: 0.35rem 0.55rem;
+    padding: 0.28rem 0.5rem;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #2c5f8d;
   }
 
@@ -133,20 +151,20 @@
   }
 
   .hint {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #888;
   }
   
   .label {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
   }
   
   .value {
-    font-size: 2rem;
+    font-size: 1.55rem;
     font-weight: bold;
     color: #2c5f8d;
   }

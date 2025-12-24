@@ -31,7 +31,7 @@
 {#if gameState.state === 'GAMEOVER'}
   <div class="overlay gameover-overlay">
     <div class="content">
-      <h1>Game Over!</h1>
+      <h1>You Got Hit!</h1>
       
       {#if isNewHighScore}
         <p class="new-high-score">🎉 New High Score! 🎉</p>
@@ -57,10 +57,10 @@
       <div class="final-stats" aria-label="Final statistics">
         <h2>Final Stats</h2>
         <div class="stats-grid">
-          <div class="stat-row"><span class="k">Seekers Dodged</span><span class="v">{gameState.dodgedSeekers}</span></div>
-          <div class="stat-row"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
-          <div class="stat-row"><span class="k">Vortex Dodged</span><span class="v">{gameState.dodgedVortex}</span></div>
-          <div class="stat-row"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
+          <div class="stat-row seeker"><span class="k">Seekers Dodged</span><span class="v">{gameState.dodgedSeekers}</span></div>
+          <div class="stat-row fracturer"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
+          <div class="stat-row vortex"><span class="k">Vortex Dodged</span><span class="v">{gameState.dodgedVortex}</span></div>
+          <div class="stat-row heavy"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
         </div>
       </div>
       
@@ -154,12 +154,30 @@
   }
 
   .stat-row {
+    --accent: #2c5f8d;
     display: flex;
     align-items: center;
     justify-content: space-between;
     background: rgba(44, 95, 141, 0.08);
     padding: 0.85rem 1rem;
     border-radius: 12px;
+    border-left: 6px solid var(--accent);
+  }
+
+  .stat-row.seeker {
+    --accent: #ff6a3d;
+  }
+
+  .stat-row.fracturer {
+    --accent: #b07cff;
+  }
+
+  .stat-row.vortex {
+    --accent: #31d3ff;
+  }
+
+  .stat-row.heavy {
+    --accent: #ffd34d;
   }
 
   .k {
@@ -171,7 +189,7 @@
   }
 
   .v {
-    color: #2c5f8d;
+    color: var(--accent);
     font-weight: 900;
     font-size: 1.2rem;
   }
