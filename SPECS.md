@@ -1,128 +1,271 @@
-# Snowman’s Great Escape — Frontend-only Threlte/SvelteKit
+# Snowman's Great Escape — Game Design Specification
 
-## Goal
+## Vision
 
-A small, polished third-person dodging game. Player controls a Snowman (GLTF) moving left/right to dodge incoming snowballs. Visual appeal + “game feel” are prioritized over scope.
+A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over twitch reflexes. Built with SvelteKit and Threlte, the game challenges players to read predictive AI behaviors and exploit pattern vulnerabilities through strategic positioning and jump timing.
+
+**Design Philosophy:** "Intelligence-based tactical dodge" — difficulty scales through smarter AI rather than overwhelming density.
 
 ---
 
-## 1) Scene Setup & Perspective
+## 1) Scene & Visual Design
 
 ### Camera
 
-- Third-person follow camera.
-- Position offset (initial): behind + above player (e.g. x: playerX, y: 5, z: 10).
-- Smooth follow: interpolate camera position towards target (use `useFrame` + lerp OR Svelte spring).
-- Smooth lookAt: camera looks at a point slightly ahead of player (e.g. x: playerX, y: playerY + 1, z: playerZ + 4) with smoothing.
+- **Third-person follow camera** with smooth spring interpolation
+- Position: `{ x: playerX, y: 5.2, z: 10.5 }`
+- Look-at target: `{ x: playerX, y: 0.8, z: -6 }` (slightly ahead for visibility)
+- Dynamic roll based on velocity for kinetic feedback
 
-### World
+### Environment ("Snowy Void")
 
-- Plane: large white ground plane.
-- Fog: add scene fog (white or light blue) to hide the “end of world” and sell depth.
-- Lighting: ambient + directional (soft, wintery). Optional rim light for readability.
+- **Black void aesthetic** — fog and background both `#000000` for clean infinite horizon
+- **Procedurally displaced snow ground** (80×150 PlaneGeometry segments)
+  - Multi-octave noise for natural drifts
+  - Real-time trail deformation system (Gaussian stamping with asymmetric berms)
+- **PCFSoftShadowMap** rendering at 2048×2048 resolution
+  - Tight directional light frustum for crisp shadows
+  - Player model auto-grounded via Box3 bounds calculation
+- **Lighting:**
+  - Ambient (0.5 intensity)
+  - Directional (1.3 intensity, casts shadows)
+  - Rim light (0.35 intensity, blue-tinted)
+
+### Visual Effects
+
+- **Snow Trail System:** Procedural deformation mesh following player movement
+  - Groove depth + pushed-up berms (direction-aware)
+  - 7.5-second fade using Gaussian influence decay
+- **Kinetic Particle System (SnowSpurt):** 700-particle buffer with dual physics
+  - 72% fluffy powder (low gravity, high drag)
+  - 28% slushy clumps (heavy, faster fall)
+  - Emission rate scales with velocity (speed × 58 particles/second)
+  - Additive blending with soft radial falloff
 
 ---
 
-## 2) Player (Snowman Asset)
+## 2) Player Mechanics
 
-### Asset Loading
+### Snowman Asset
 
-- Load Snowman `.gltf/.glb` via Threlte GLTF helper (e.g. `<GLTF />` or `useGltf`).
-- Ensure scale and pivot feel correct for movement/collision.
+- GLTF model loaded via Threlte
+- **Auto-grounding system:** Box3 bounds calculation after scale application
+- Shadow casting enabled on all child meshes
+- Visual smoothing (lag factor 0.088) for kinetic feel
 
 ### Movement
 
-- Axis: X-axis only.
-- Input: A/D and ArrowLeft/ArrowRight.
-- Use an “intent target” pattern:
-  - Maintain `targetX` driven by input and clamped to bounds (e.g. [-maxX, maxX]).
-  - Visual position follows via spring for smooth sliding.
-- Optional upgrade (recommended): acceleration + friction for “ice” feel:
-  - `vx += input * accel * dt`
-  - `vx *= friction`
-  - `targetX += vx * dt`
-- Tilt polish: when moving left/right, add slight Z-axis tilt, return to 0 when idle.
+- **Horizontal (X-axis):** Keyboard input (A/D, Arrow Keys)
+  - Acceleration: `52 units/s²`
+  - Friction: `0.84` (creates ice-sliding feel)
+  - Bounds: `±6.2` units
+  - Visual tilt: `0.19 rad` based on velocity
+- **Vertical (Jump):** Spacebar
+  - Impulse: `4.75` units/s
+  - Cooldown: `0.35s`
+  - Gravity: `9.8 m/s²`
 
 ---
 
-## 3) Projectile System (Obstacles)
+## 3) Obstacle System (Snowball Archetypes)
 
-### Data Model
+### Core Design
 
-- Maintain `snowballs: Array<{ id: number; x: number; z: number; active: boolean }>`.
+**Philosophy:** Each archetype requires different counter-strategies (positional reads vs. timing dodges vs. pattern exploitation).
 
-### Spawning
+**Rendering:**
+- 3 procedural Voronoi-displaced geometry variants (visual variation)
+- Shared PBR snow material + seeker-specific red emissive variant
+- Scale range: `0.5–1.3` (standard) with archetype-specific multipliers
 
-- Spawn at z = far behind/forward (depending on coordinate choice, e.g. z = -50).
-- Random x within bounds or discrete lanes.
-- Difficulty scaling over time:
-  - Spawn interval decreases gradually (min clamp, e.g. 250ms).
-  - Snowball speed increases gradually.
-- Fairness rule (avoid impossible patterns):
-  - Prevent too many consecutive spawns in same lane (e.g. max 2 consecutive).
+### Archetype Catalog
 
-### Movement & Cleanup
+#### 1. STANDARD (Baseline Threat)
+- **Behavior:** Straight-line movement at constant speed
+- **Counter:** Basic positional dodge
+- **Frequency:** Common at EASY (80%), rare at INSANE (10%)
 
-- In `useFrame`, move each active snowball: `z += speed * dt`.
-- Remove/recycle when it passes player (e.g. z > 15).
+#### 2. SEEKER (Predictive Hunter) 🎯
+- **Behavior:** 
+  - Calculates player intercept point using lead time (tToPlayer = distance / speed)
+  - Predicted target: `playerX + playerVelocityX × leadTime`
+  - Exponential smoothing: `α = 1 - e^(-3.6Δt)` for natural steering
+  - **Path Lock:** Stops adjusting at Z = -15 (commitment distance)
+- **Visual Tell:** Red emissive material + yaw jitter (±0.12 rad @ 8Hz)
+- **Counter:** Bait early, dodge late (exploit lock distance), or jump over
+- **Stats:** Scale 0.95, Speed ×1.05
+- **Frequency:** Scales from 5% (EASY) to 26% (INSANE)
 
-### Performance (choose one)
+#### 3. FRACTURER (Split Bomb) 💥
+- **Behavior:**
+  - Large slow snowball approaching
+  - Splits into 2 fragments at Z = -13 ± variation
+  - Fragments spawn at ±1.5 units lateral offset
+  - Fragment speed: 1.4× parent speed
+- **Counter:** Position between fragments before split, or jump the formation
+- **Stats:** Scale 1.45, Speed ×0.7 (compensates for split)
+- **Frequency:** Scales from 5% (EASY) to 27% (INSANE)
 
-- Baseline: plain array + individual meshes (OK for small counts).
-- Preferred: object pooling OR instanced mesh for snowballs to avoid churn.
+#### 4. VORTEX (Oscillator) 🌀
+- **Behavior:**
+  - Sinusoidal path: `x = baseX + sin(freq × age + phase) × amplitude`
+  - Frequency: `2.5 ± 1.8 Hz`
+  - Amplitude: `0.95` units (respects playable bounds)
+- **Counter:** Track oscillation timing, dodge into safe zones
+- **Stats:** Scale 0.85, Speed ×0.95
+- **Frequency:** Scales from 10% (EASY) to 30% (INSANE)
 
----
-
-## 4) Collision Detection (Frontend-only)
-
-- In `useFrame`, check collisions between player and each snowball.
-- Use squared distance (performance-friendly):
-  - `(dx*dx + dz*dz) < (rSum*rSum)`
-- Use scale-aware radii:
-  - `rSum = snowmanRadius + snowballRadius`
-
-On collision:
-
-- Trigger hit-stop (~120ms freeze) then GAMEOVER state.
-- Visual feedback: canvas shake OR white-out “splat” overlay.
-
----
-
-## 5) UI & State
-
-### Game States
-
-- START: “Click to Play” overlay.
-- PLAYING: HUD with Distance/Time traveled.
-- GAMEOVER: show final score + restart button.
-
-### Persistence
-
-- Save best score to `localStorage`.
-- Compare at GAMEOVER and display “New High Score” indicator if applicable.
-
-### Accessibility & Motion
-
-- Respect `prefers-reduced-motion`:
-  - disable heavy shake/flash or provide minimal alternative.
+#### 5. HEAVY (Boulder) 🪨
+- **Behavior:**
+  - Massive slow-moving obstacle
+  - Occupies ~1.5 lanes (collision radius ×2.1)
+  - Minimal visual wobble (heavy feel)
+- **Counter:** Early repositioning (cannot be out-maneuvered late), or jump
+- **Stats:** Scale 2.35, Speed ×0.55, Hitbox ×2.1
+- **Frequency:** Scales from 0% (EASY) to 7% (INSANE)
 
 ---
 
-## 6) “Game Feel” Polish (small but high impact)
+## 4) Difficulty System (Anchored Presets)
 
-- Camera roll/tilt slightly based on movement velocity.
-- Add subtle ambient audio (wind) + collision “thump”.
-- Optional: scrolling ground texture or moving particles to sell forward motion.
+### Design Principle
+
+**Each preset maintains identity throughout the session** — EASY never escalates into HARD behavior, preventing frustration from unexpected difficulty spikes.
+
+### Preset Curves (Independent Bounds)
+
+| Preset | Spawn Interval | Speed Range | Profile Mix |
+|--------|---------------|-------------|-------------|
+| **EASY** | 1.7s → 0.95s | 7.5 → 14.5 | 80% Standard, 20% Elite |
+| **NORMAL** | 1.5s → 0.7s | 8.0 → 19.5 | 55% Standard, 45% Elite |
+| **HARD** | 1.25s → 0.55s | 8.5 → 23.5 | 30% Standard, 70% Elite |
+| **INSANE** | 1.05s → 0.45s | 9.0 → 28.5 | 10% Standard, 90% Elite |
+
+All curves ramp over **60 seconds** (linear interpolation).
+
+### Spawner Intelligence
+
+- **Lane Occupancy Cap:** Maximum 3 blocked lanes simultaneously (even on INSANE)
+  - Prevents impossible "walls" that violate fairness
+  - Forces strategic pattern design over brute density
+- **Dynamic Lane Drift:** Random-walk lane shift (±0.9 amplitude) creates organic variation
+- **Pattern Sequencing:** Weighted lane selection favors untargeted lanes (timeout: 2.75s)
+- **Stagger Rows:** Vertical spacing of 2.2 units for multiple simultaneous threats
 
 ---
 
-## 7) Implementation Milestones
+## 5) Collision & Game States
 
-1. Environment: Threlte canvas, lights, fog, ground plane.
-2. Player: load Snowman GLTF, clamp movement, smooth motion.
-3. Follow camera: smooth position + smooth lookAt target.
-4. Snowballs: spawn system + movement + cleanup/pooling.
-5. Collision: radii-based check + GAMEOVER transition + hit-stop.
-6. HUD: overlays for START/PLAYING/GAMEOVER + best score.
-7. Polish pass: camera roll, splat overlay, audio, tuning constants.
-8. Dev toggles: quick debug overlay (speed, spawn interval, count).
+### Collision Detection
+
+- **Algorithm:** Squared distance check (performance-optimized)
+  - `(dx² + dz²) < (r₁ + r₂)²`
+- **Radii:**
+  - Player: `0.5` units
+  - Standard snowball: `0.6` units
+  - Heavy snowball: `0.6 × 2.1 = 1.26` units
+- **Hit-Stop:** 120ms freeze on collision for impact feedback
+
+### State Machine
+
+1. **LOADING:** Asset loading gate (prevents invisible hitbox issues)
+2. **START:** "Click to Play" overlay with difficulty selector
+3. **PLAYING:** Active gameplay with HUD
+4. **GAMEOVER:** Post-game stats with archetype breakdown
+
+---
+
+## 6) UI/UX Design
+
+### HUD (In-Game)
+
+- **Compact stat card** (scaled 0.85, stacked layout)
+  - Distance traveled (meters)
+  - Time elapsed (seconds)
+- **Difficulty controls** (Change Preset / Restart buttons)
+
+### Game Over Screen
+
+- **Headline:** "You Got Hit!" (negative reinforcement tone)
+- **Archetype Stats:** Color-coded breakdown
+  - Seeker dodges: Orange (`#ff6a3d`)
+  - Fracturer dodges: Purple (`#a78bfa`)
+  - Vortex dodges: Cyan (`#22d3ee`)
+  - Heavy dodges: Red (`#ef4444`)
+- **Persistence:** Best score saved to localStorage
+- **New High Score indicator** if applicable
+
+---
+
+## 7) Performance Optimization
+
+### Rendering Pipeline
+
+- **Instanced Geometry:** 3 shared Voronoi-displaced buffers
+- **Material Sharing:** 2 materials total (snow + seeker emissive)
+- **Shadow Optimization:** Tight frustum + 2048 resolution
+- **Fixed Particle Buffer:** 700-particle limit (no per-frame allocations)
+
+### Physics Loop
+
+- **Delta-Time Decoupling:** Frame-rate independent updates
+- **O(1) Updates:** Direct property mutation via references
+- **Non-Reactive Engine State:** High-frequency updates outside Svelte reactivity
+  - Reactive: UI state (distance, time, scores)
+  - Non-reactive: Physics (playerX, velocityX, snowball arrays)
+
+### Asset Loading
+
+- **Lazy Geometry Creation:** Voronoi displacement computed on-demand
+- **Material Disposal:** Cleanup hooks prevent memory leaks
+- **Terrain Reset Hook:** Clears trail deformation between sessions
+
+---
+
+## 8) Implementation Status
+
+### ✅ Completed Features
+
+- [x] Third-person camera with spring smoothing + dynamic roll
+- [x] Snowman GLTF with auto-grounding + shadow system
+- [x] Ice-sliding physics (acceleration + friction)
+- [x] Jump mechanics with cooldown
+- [x] Procedural snow terrain with real-time trail deformation
+- [x] Kinetic particle system (velocity-scaled emission)
+- [x] 5 distinct snowball archetypes with unique behaviors
+- [x] Predictive Seeker AI with path lock + visual tell
+- [x] Fracturer split mechanic
+- [x] Vortex oscillation patterns
+- [x] Heavy boulder with expanded hitbox
+- [x] Difficulty anchoring (per-preset bounded curves)
+- [x] Spawner intelligence (lane caps, probability tables, pattern sequencing)
+- [x] PCFSoftShadowMap rendering (2048 resolution)
+- [x] Black void aesthetic (fog + background)
+- [x] Compact HUD with stacked metrics
+- [x] Color-coded Game Over stats
+- [x] Best score persistence
+- [x] SSR-safe state management (Svelte Context API)
+- [x] Performance optimization (O(1) updates, fixed buffers)
+
+### Design Iteration Highlights
+
+1. **Initial Concept:** Basic dodging with density scaling
+2. **Visual Polish Pass:** Shadows, trail system, particles
+3. **AI Revolution:** Shift from "high-density" to "high-intelligence" model
+   - Predictive intercept for Seekers
+   - Per-preset difficulty anchoring
+   - Lane occupancy caps
+   - Probability-based profile distribution
+
+---
+
+## 9) Tuning Philosophy
+
+See [TUNING.md](./TUNING.md) for comprehensive constant reference.
+
+**Key Design Levers:**
+- **Gameplay Feel:** Friction/acceleration balance creates "ice skating" physics
+- **Difficulty Identity:** Per-preset bounds prevent unwanted escalation
+- **AI Sophistication:** Seeker lock distance, oscillation frequency, split timing
+- **Visual Fidelity:** Shadow frustum, particle count, trail update rate
+- **Fairness:** Lane caps, spawn intervals, cooldown timers
