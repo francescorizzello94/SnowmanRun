@@ -32,7 +32,7 @@ export class SnowballSpawner {
 	// Elite profile weights for weighted random selection
 	// Distribution: Vortex (30%), Seeker (26%), Fracturer (27%), Heavy (17%)
 	// Note: Sum = 1.00 (0.30 + 0.26 + 0.27 + 0.17)
-	readonly VORTEX_WEIGHT = 0.30;
+	readonly VORTEX_WEIGHT = 0.3;
 	readonly SEEKER_WEIGHT = 0.26;
 	readonly FRACTURER_WEIGHT = 0.27;
 	readonly HEAVY_WEIGHT = 0.17;
@@ -177,34 +177,37 @@ export class SnowballSpawner {
 
 	private selectProfileByPreset(preset: DifficultyPreset): SnowballProfile {
 		// Probability table (explicit):
-		// EASY:    80% Standard, 10% Seeker, 5% Fracturer, 5% Vortex
-		// NORMAL:  50% Standard, 20% Seeker, 15% Fracturer, 15% Vortex
-		// HARD:    25% Standard, 35% Seeker, 20% Fracturer, 20% Vortex
-		// INSANE:  10% Standard, 45% Seeker, 25% Fracturer, 20% Vortex
+		// EASY:    80% Standard, 10% Vortex,  5% Seeker,    5% Fracturer, 0% Heavy
+		// NORMAL:  55% Standard, 20% Vortex, 12% Seeker,   10% Fracturer, 3% Heavy
+		// HARD:    30% Standard, 25% Vortex, 22% Seeker,   18% Fracturer, 5% Heavy
+		// INSANE:  10% Standard, 30% Vortex, 26% Seeker,   27% Fracturer, 7% Heavy
 		const r = Math.random();
 		if (preset === 'EASY') {
-			if (r < 0.80) return 'STANDARD';
-			if (r < 0.90) return 'SEEKER';
-			if (r < 0.95) return 'FRACTURER';
-			return 'VORTEX';
+			if (r < 0.8) return 'STANDARD';
+			if (r < 0.9) return 'VORTEX';
+			if (r < 0.95) return 'SEEKER';
+			return 'FRACTURER';
 		}
 		if (preset === 'HARD') {
-			if (r < 0.25) return 'STANDARD';
-			if (r < 0.60) return 'SEEKER';
-			if (r < 0.80) return 'FRACTURER';
-			return 'VORTEX';
+			if (r < 0.3) return 'STANDARD';
+			if (r < 0.55) return 'VORTEX';
+			if (r < 0.77) return 'SEEKER';
+			if (r < 0.95) return 'FRACTURER';
+			return 'HEAVY';
 		}
 		if (preset === 'INSANE') {
-			if (r < 0.10) return 'STANDARD';
-			if (r < 0.55) return 'SEEKER';
-			if (r < 0.80) return 'FRACTURER';
-			return 'VORTEX';
+			if (r < 0.1) return 'STANDARD';
+			if (r < 0.4) return 'VORTEX';
+			if (r < 0.66) return 'SEEKER';
+			if (r < 0.93) return 'FRACTURER';
+			return 'HEAVY';
 		}
 		// NORMAL
-		if (r < 0.50) return 'STANDARD';
-		if (r < 0.70) return 'SEEKER';
-		if (r < 0.85) return 'FRACTURER';
-		return 'VORTEX';
+		if (r < 0.55) return 'STANDARD';
+		if (r < 0.75) return 'VORTEX';
+		if (r < 0.87) return 'SEEKER';
+		if (r < 0.97) return 'FRACTURER';
+		return 'HEAVY';
 	}
 
 	/**
@@ -300,7 +303,7 @@ export class SnowballSpawner {
 			vortexFreq,
 			vortexPhase,
 			fractureZ,
-			adjustedX,
+			adjustedX
 		};
 	}
 
