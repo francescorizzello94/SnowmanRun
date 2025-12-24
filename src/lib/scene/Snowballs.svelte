@@ -432,19 +432,41 @@
       if (snowball.profile === 'VORTEX') {
         snowball.x = snowball.baseX + Math.sin(gameState.timePlayed * snowball.vortexFreq + snowball.vortexPhase) * snowball.vortexAmp;
       } else if (snowball.profile === 'SEEKER') {
-        // Predictive intercept: aim for where the player will be when the seeker reaches z=0.
-        // Then smoothly steer toward that X until the late-stage lock distance.
+        /**
+         * SEEKER PREDICTIVE INTERCEPT AI
+         * 
+         * Strategy: Calculate where the player WILL BE when the seeker reaches
+         * the interception point (z=0), then smoothly steer toward that position.
+         * 
+         * Path Lock Mechanic: Once the seeker crosses SEEKER_LOCK_Z (-15 units),
+         * it commits to its current heading. This creates a tactical window:
+         * - Early game: Bait the seeker by moving in one direction
+         * - Late dodge: Reverse direction after lock to exploit commitment
+         * 
+         * Mathematical Model:
+         * 1. Time-to-intercept: tToPlayer = distance / speed
+         * 2. Lead time: Apply min/max clamps to prevent over-prediction
+         * 3. Predicted target: playerX + playerVelocityX × leadTime
+         * 4. Exponential smoothing: α = 1 - e^(-TURN_RATE × Δt)
+         *    - Prevents instant snapping (looks robotic)
+         *    - Creates natural "steering" behavior
+         * 5. Path lock: Freeze baseX when crossing lock threshold
+         * 
+         * Visual Tell: Red emissive material + yaw jitter applied below
+         */
         const locked = snowball.seekerLocked === true;
         if (!locked && snowball.z >= SEEKER_LOCK_Z) {
-          snowball.seekerLocked = true;
+          snowball.seekerLocked = true; // Commit to current heading
         }
 
         if (snowball.seekerLocked !== true) {
+          // Calculate intercept point with velocity lead
           const toPlayer = Math.max(0.001, 0 - snowball.z);
           const tToPlayer = toPlayer / Math.max(0.001, snowballSpeed);
           const leadT = Math.max(SEEKER_LEAD_MIN, Math.min(SEEKER_LEAD_MAX, tToPlayer));
           const predictedX = Math.max(-7, Math.min(7, playerX + gameState.playerVelocityX * leadT));
 
+          // Exponential smoothing for natural steering (prevents robotic snap-turns)
           const a = 1 - Math.exp(-SEEKER_TURN_RATE * delta);
           snowball.baseX = snowball.baseX + (predictedX - snowball.baseX) * a;
         }

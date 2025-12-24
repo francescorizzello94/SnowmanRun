@@ -140,6 +140,22 @@
     });
   }
 
+  /**
+   * Auto-grounding algorithm for GLTF models
+   * 
+   * Problem: GLTF models often have arbitrary pivot points, making manual Y-offset
+   * error-prone. This function computes the bounding box AFTER scaling, finds the
+   * lowest vertex, and offsets the model so that point aligns with GROUND_Y.
+   * 
+   * Process:
+   * 1. Apply scale to model (affects bounds calculation)
+   * 2. Force world matrix update to get accurate transformed bounds
+   * 3. Compute bounding box (includes all child meshes)
+   * 4. Offset Y position so minY aligns with ground plane
+   * 5. Apply GROUND_SINK to slightly embed model into snow for visual contact
+   * 
+   * @param root - The GLTF scene root object to ground
+   */
   function placeModelOnGround(root: THREE.Object3D) {
     // Apply scale in code so we can compute accurate bounds.
     root.scale.setScalar(SNOWMAN_SCALE);

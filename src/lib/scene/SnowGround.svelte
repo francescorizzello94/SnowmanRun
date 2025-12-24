@@ -93,6 +93,21 @@
     return { x: worldX, y: -(worldZ - GROUND_Z) };
   }
 
+  /**
+   * Stamps a new trail point into the deformation system
+   * 
+   * Design: Uses Gaussian stamping to create a groove with pushed-up berms.
+   * Direction-aware to create asymmetric displacement (snow pushed to the side
+   * based on movement direction).
+   * 
+   * Throttling: Stamps are spaced STAMP_SPACING apart to avoid excessive geometry
+   * updates. Only stamps when speed exceeds MIN_SPEED_TO_STAMP (prevents stationary
+   * sinking).
+   * 
+   * @param worldX - Player X position in world space
+   * @param worldZ - Player Z position in world space
+   * @param now - Current game time for fade calculation
+   */
   function addTrailPoint(worldX: number, worldZ: number, now: number) {
     const speed = Math.abs(gameState.playerVelocityX);
     if (speed < MIN_SPEED_TO_STAMP) return;
@@ -100,12 +115,14 @@
     const dir = Math.sign(gameState.playerVelocityX) || 0;
     const p = worldToGroundLocal(worldX, worldZ);
 
+    // Throttle stamps to avoid excessive geometry work
     const dx = p.x - lastStampX;
     const dy = p.y - lastStampY;
     if (dx * dx + dy * dy < STAMP_SPACING * STAMP_SPACING) return;
     lastStampX = p.x;
     lastStampY = p.y;
 
+    // Strength scales with speed (faster movement = deeper groove)
     const strength = Math.min(1, speed / 10);
     trail.push({ x: p.x, y: p.y, t: now, strength, dir });
     if (trail.length > MAX_POINTS) trail.shift();
@@ -153,6 +170,23 @@
     normals.needsUpdate = true;
   }
 
+  /**
+   * Applies all trail deformations to the terrain geometry
+   * 
+   * Algorithm: For each vertex, sum Gaussian influence from all active trail points.
+   * Creates both a groove (negative displacement) and asymmetric berms (positive
+   * displacement on the sides, stronger on the movement direction side).
+   * 
+   * Performance: Throttled to UPDATE_HZ (18Hz) instead of per-frame. Rebuilds
+   * vertex heights additively from baseZ to allow multiple overlapping trails.
+   * 
+   * Mathematical model:
+   * - Groove: Gaussian kernel centered on stamp, depth = TRACK_DEPTH × strength × fade
+   * - Berms: Ridge band function (peaks at 0.65-0.85 normalized distance from center)
+   *   with directional bias (1.0 on movement side, 0.65 on opposite side)
+   * 
+   * @param now - Current game time for fade calculation
+   */
   function applyTrail(now: number) {
     // Prune expired points.
     for (let i = trail.length - 1; i >= 0; i--) {
@@ -180,6 +214,7 @@
         const dx = x - tp.x;
         const dy = y - tp.y;
 
+        // Gaussian influence kernel
         const g = Math.exp(-(dx * dx) * inv2sx2 - (dy * dy) * inv2sy2);
         const s = tp.strength * fade;
 
