@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { T } from '@threlte/core';
-  import { onDestroy } from 'svelte';
+  import { T, useTask } from '@threlte/core';
+  import { onDestroy, onMount } from 'svelte';
+  import { getGameState } from '$lib/game';
   import * as THREE from 'three';
   
   
@@ -54,6 +55,61 @@
     GROUND_SEGMENTS_X, 
     GROUND_SEGMENTS_Z
   );
+
+  // Ground transform (must match template below)
+  const GROUND_Y = -0.01;
+  const GROUND_Z = -30;
+
+  // === Snow trail (procedural deformation) ===
+  // Goal: a subtle packed groove + pushed-up berms when the player moves.
+  // Designed to be minimal and textureless; no extra meshes.
+  const gameState = getGameState();
+
+  type TrailPoint = { x: number; y: number; t: number; strength: number; dir: number };
+  const MAX_POINTS = 80;
+  const trail: TrailPoint[] = [];
+
+  const TRACK_HALF_WIDTH = 0.55; // ~snowman footprint width
+  const TRACK_HALF_LENGTH = 0.7;
+  const TRACK_DEPTH = 0.055;
+  const BERM_HEIGHT = 0.035;
+  const FADE_SECONDS = 7.5;
+  const STAMP_SPACING = 0.18;
+  const MIN_SPEED_TO_STAMP = 0.35;
+  const UPDATE_HZ = 18;
+
+  let lastStampX = 1e9;
+  let lastStampY = 1e9;
+  let accum = 0;
+
+  function smoothstep(edge0: number, edge1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+
+  function worldToGroundLocal(worldX: number, worldZ: number): { x: number; y: number } {
+    // Plane is rotated -PI/2 around X, so its local +Y points toward world -Z.
+    // With no scale and only translation, local X = worldX, local Y = -(worldZ - GROUND_Z).
+    return { x: worldX, y: -(worldZ - GROUND_Z) };
+  }
+
+  function addTrailPoint(worldX: number, worldZ: number, now: number) {
+    const speed = Math.abs(gameState.playerVelocityX);
+    if (speed < MIN_SPEED_TO_STAMP) return;
+
+    const dir = Math.sign(gameState.playerVelocityX) || 0;
+    const p = worldToGroundLocal(worldX, worldZ);
+
+    const dx = p.x - lastStampX;
+    const dy = p.y - lastStampY;
+    if (dx * dx + dy * dy < STAMP_SPACING * STAMP_SPACING) return;
+    lastStampX = p.x;
+    lastStampY = p.y;
+
+    const strength = Math.min(1, speed / 10);
+    trail.push({ x: p.x, y: p.y, t: now, strength, dir });
+    if (trail.length > MAX_POINTS) trail.shift();
+  }
   
   // Apply terrain displacement
   const positions = geometry.attributes.position;
@@ -71,10 +127,103 @@
     const height = Math.max(-0.10, Math.min(0.10, raw));
     positions.setZ(i, height);
   }
+
+  // Keep a copy of the base terrain so the trail can be applied additively.
+  const baseZ = new Float32Array(positions.count);
+  for (let i = 0; i < positions.count; i++) {
+    baseZ[i] = positions.getZ(i);
+  }
   
   geometry.computeVertexNormals();
+
+  function resetTerrain() {
+    // Clear trail state (must happen before restoring base terrain)
+    trail.length = 0;
+    lastStampX = 1e9;
+    lastStampY = 1e9;
+    accum = 0;
+
+    // Restore base terrain (undo any deformation)
+    for (let i = 0; i < positions.count; i++) {
+      positions.setZ(i, baseZ[i]);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    const normals = geometry.attributes.normal as THREE.BufferAttribute;
+    normals.needsUpdate = true;
+  }
+
+  function applyTrail(now: number) {
+    // Prune expired points.
+    for (let i = trail.length - 1; i >= 0; i--) {
+      if (now - trail[i].t > FADE_SECONDS) trail.splice(i, 1);
+    }
+
+    if (trail.length === 0) return;
+
+    const sx = TRACK_HALF_WIDTH;
+    const sy = TRACK_HALF_LENGTH;
+    const inv2sx2 = 1 / (2 * sx * sx);
+    const inv2sy2 = 1 / (2 * sy * sy);
+
+    // Rebuild heights from base + trail influence.
+    for (let vi = 0; vi < positions.count; vi++) {
+      const x = positions.getX(vi);
+      const y = positions.getY(vi);
+      let z = baseZ[vi];
+
+      for (let pi = 0; pi < trail.length; pi++) {
+        const tp = trail[pi];
+        const age = now - tp.t;
+        const fade = Math.exp(-age / FADE_SECONDS);
+
+        const dx = x - tp.x;
+        const dy = y - tp.y;
+
+        const g = Math.exp(-(dx * dx) * inv2sx2 - (dy * dy) * inv2sy2);
+        const s = tp.strength * fade;
+
+        // Packed groove.
+        z += -TRACK_DEPTH * s * g;
+
+        // Side berms: stronger on the "outside" of movement.
+        const edge = Math.abs(dx) / sx;
+        const ridgeBand = smoothstep(0.45, 0.85, edge) * (1 - smoothstep(0.85, 1.25, edge));
+        const bias = tp.dir !== 0 && dx * tp.dir > 0 ? 1.0 : 0.65;
+        z += BERM_HEIGHT * s * g * ridgeBand * bias;
+      }
+
+      positions.setZ(vi, z);
+    }
+
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    const normals = geometry.attributes.normal as THREE.BufferAttribute;
+    normals.needsUpdate = true;
+  }
+
+  const { stop } = useTask((delta) => {
+    if (gameState.state !== 'PLAYING') return;
+
+    // Stamp at the player's ground contact position.
+    addTrailPoint(gameState.playerX, 0, gameState.timePlayed);
+
+    // Throttle geometry work.
+    accum += delta;
+    const step = 1 / UPDATE_HZ;
+    if (accum < step) return;
+    accum = 0;
+
+    applyTrail(gameState.timePlayed);
+  });
+
+  onMount(() => {
+    gameState.registerTerrainResetHook(resetTerrain);
+  });
   
   onDestroy(() => {
+    gameState.unregisterTerrainResetHook(resetTerrain);
+    stop?.();
     geometry.dispose();
     snowGroundMaterial.dispose();
   });
@@ -83,7 +232,7 @@
 <T.Mesh 
   name="SnowGround"
   rotation.x={-Math.PI / 2} 
-  position={[0, -0.01, -30]}
+  position={[0, GROUND_Y, GROUND_Z]}
   receiveShadow
 >
   <T is={geometry} />

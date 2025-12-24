@@ -153,6 +153,9 @@ export class GameStateManager {
 	spawnerLastPressureTime: number = 0;
 	spawnerLastPatternMask: number = 0;
 
+	// Terrain reset hook (registered by the ground component)
+	private resetTerrainHook: (() => void) | null = null;
+
 	constructor() {
 		// Initialize subsystems with dependency injection
 		this.difficulty = new DifficultyManager();
@@ -183,6 +186,15 @@ export class GameStateManager {
 		if (this.state !== 'START' && this.state !== 'GAMEOVER') return;
 		this.state = 'PLAYING';
 
+		// Reset reactive run counters FIRST so any per-frame systems that depend on
+		// time/distance start at a consistent origin.
+		this.distanceTraveled = 0;
+		this.timePlayed = 0;
+
+		// Hard reset terrain state for a clean new session.
+		// (Ground component clears trail markers + restores base noise.)
+		this.resetTerrainHook?.();
+
 		// Reset engine state
 		this.playerX = 0;
 		this.playerVelocityX = 0;
@@ -212,8 +224,6 @@ export class GameStateManager {
 		this.frostBurstZ = 0;
 
 		// Reset reactive UI state
-		this.distanceTraveled = 0;
-		this.timePlayed = 0;
 		this.milestoneText = null;
 		this.milestoneExpiresAt = 0;
 		this.dodgedSeekers = 0;
@@ -221,6 +231,14 @@ export class GameStateManager {
 		this.dodgedVortex = 0;
 		this.dodgedHeavies = 0;
 		this.frostBurstCharges = 0;
+	}
+
+	registerTerrainResetHook(fn: () => void) {
+		this.resetTerrainHook = fn;
+	}
+
+	unregisterTerrainResetHook(fn: () => void) {
+		if (this.resetTerrainHook === fn) this.resetTerrainHook = null;
 	}
 
 	queueMilestone(text: string, duration: number = 0.85) {

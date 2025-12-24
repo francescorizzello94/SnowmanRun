@@ -6,6 +6,7 @@
   import Player from './Player.svelte';
   import Snowballs from './Snowballs.svelte';
   import Snowfall from './Snowfall.svelte';
+  import SnowSpurt from './SnowSpurt.svelte';
 </script>
 
 <div class="scene-container">
@@ -14,7 +15,7 @@
     shadows
   >
     <!-- Black void backdrop -->
-    <T.Color attach="background" args={['#00111e']} />
+    <T.Color attach="background" args={['#000000']} />
     
     <!-- Camera -->
     <Camera />
@@ -27,6 +28,7 @@
     
     <!-- Game objects -->
     <Player />
+    <SnowSpurt />
     <Snowballs />
   </Canvas>
 </div>

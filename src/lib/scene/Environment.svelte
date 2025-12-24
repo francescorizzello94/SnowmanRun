@@ -1,8 +1,14 @@
 <script lang="ts">
   import { T } from '@threlte/core';
   import SnowGround from './SnowGround.svelte';
+  import { useThrelte } from '@threlte/core';
   import { onDestroy } from 'svelte';
   import * as THREE from 'three';
+
+  const { renderer } = useThrelte();
+  // Smoother shadow filtering to reduce jagged edges.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const surroundMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
@@ -33,26 +39,26 @@
   intensity={4.8}
   color="#ffffff"
   castShadow
-  shadow.camera.left={-25}
-  shadow.camera.right={25}
-  shadow.camera.top={25}
-  shadow.camera.bottom={-25}
+  shadow.camera.left={-12}
+  shadow.camera.right={12}
+  shadow.camera.top={16}
+  shadow.camera.bottom={-16}
   shadow.camera.near={0.1}
   shadow.camera.far={100}
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
-  shadow.bias={-0.00005}
-  shadow.normalBias={0.02}
+  shadow.bias={-0.0001}
+  shadow.normalBias={0.015}
 />
 
 <!-- HEMISPHERE LIGHT (Sky/Ground ambient) -->
 <!-- Vibrant sky-blue fill with soft grey ground bounce -->
 <T.HemisphereLight 
-  args={['#00aaff', '#c7cbd1', 0.9]}
+  args={['#00aaff', '#c7cbd1', 0.65]}
 />
 
 <!-- AMBIENT FILL (prevents pitch black shadows) -->
-<T.AmbientLight intensity={0.18} color="#d8ecff" />
+<T.AmbientLight intensity={0.12} color="#d8ecff" />
 
 <!-- BACK/RIM LIGHT (silhouette definition) -->
 <T.DirectionalLight 
@@ -62,4 +68,4 @@
 />
 
 <!-- EXPONENTIAL FOG (winter atmosphere + hides distant geometry) -->
-<T.FogExp2 attach="fog" args={['#00111e', 0.018]} />
+<T.FogExp2 attach="fog" args={['#000000', 0.018]} />

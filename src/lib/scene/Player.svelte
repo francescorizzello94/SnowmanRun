@@ -13,6 +13,11 @@
   const VISUAL_LERP_SPEED = 24; // How fast visual catches up to logical position
   const TILT_AMOUNT = 0.08; // Subtle tilt based on movement direction
   const PLAYER_Z = 0; // Player stays at z=0
+
+  // Model placement
+  const SNOWMAN_SCALE = 0.05;
+  const GROUND_Y = -0.01; // Matches SnowGround's Y
+  const GROUND_SINK = 0.02; // Slightly embed into snow for contact
   
   // Input tracking
   let leftPressed = $state(false);
@@ -115,6 +120,12 @@
   function tuneGltfMaterials(root: THREE.Object3D) {
     root.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
+
+      // Ensure shadows work for all actual renderable meshes (GLTF root flags
+      // don't always propagate to children).
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+
       const material = obj.material;
       const mats = Array.isArray(material) ? material : [material];
       for (const mat of mats) {
@@ -129,10 +140,24 @@
     });
   }
 
+  function placeModelOnGround(root: THREE.Object3D) {
+    // Apply scale in code so we can compute accurate bounds.
+    root.scale.setScalar(SNOWMAN_SCALE);
+    root.updateWorldMatrix(true, true);
+
+    const box = new THREE.Box3().setFromObject(root);
+    const minY = box.min.y;
+
+    // Move so the lowest point sits on the ground plane, then sink slightly.
+    root.position.y += (GROUND_Y - minY) - GROUND_SINK;
+    root.updateWorldMatrix(true, true);
+  }
+
   // Load snowman GLTF with explicit lifecycle management
   const gltfPromise = useGltf('/snowman_scene.gltf')
     .then((gltf) => {
       tuneGltfMaterials(gltf.scene);
+      placeModelOnGround(gltf.scene);
       gameState.setReady();
       return gltf;
     })
@@ -151,7 +176,7 @@
       <!-- Loading state - no visual until ready -->
     {:then gltf}
       <!-- GLTF model loaded successfully -->
-			<T is={gltf.scene} scale={0.05} position.y={1.5} castShadow />
+			<T is={gltf.scene} castShadow />
     {:catch}
       <!-- Error handled via gameState.setError() - no geometry rendered -->
     {/await}
