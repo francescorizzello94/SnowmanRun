@@ -63,8 +63,18 @@
           <div class="stat-row heavy"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
         </div>
       </div>
-      
-      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleRestart} autofocus>Play Again</button>
+
+      <div class="actions" aria-label="Game over actions">
+        <button type="button" aria-keyshortcuts="Enter Space" onclick={handleRestart}>Play Again</button>
+        <a
+          class="coffee"
+          href="https://buymeacoffee.com/cellardoortechnologies"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Buy me a coffee
+        </a>
+      </div>
     </div>
   </div>
 {/if}
@@ -217,8 +227,15 @@
     color: #2c5f8d;
   }
   
-  button {
+  .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
     margin-top: 2rem;
+  }
+
+  button {
     padding: 1rem 2rem;
     font-size: 1.5rem;
     background: #2c5f8d;
@@ -236,5 +253,31 @@
   
   button:active {
     transform: scale(0.95);
+  }
+
+  .coffee {
+    display: inline-block;
+    color: #2c5f8d;
+    font-weight: 800;
+    text-decoration: none;
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(44, 95, 141, 0.35);
+    background: rgba(44, 95, 141, 0.08);
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  .coffee:hover {
+    background: rgba(44, 95, 141, 0.12);
+    transform: scale(1.02);
+  }
+
+  .coffee:active {
+    transform: scale(0.98);
+  }
+
+  .coffee:focus-visible {
+    outline: 2px solid rgba(44, 95, 141, 0.6);
+    outline-offset: 3px;
   }
 </style>
