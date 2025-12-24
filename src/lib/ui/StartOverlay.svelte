@@ -80,7 +80,7 @@
       </div>
 
       <div class="panel" aria-label="Antagonistic snowball types">
-        <h2>Antagonistic snowballs</h2>
+        <h2>Beware these snowball types!</h2>
         <div class="enemy-grid" role="list">
           <div class="enemy-card seeker" role="listitem">
             <div class="swatch" aria-hidden="true"></div>
