@@ -427,6 +427,8 @@
       if (snowball.profile === 'FRACTURER' && !snowball.hasFractured && snowball.z >= snowball.fractureZ) {
         snowball.hasFractured = true;
 
+        const parentFracturerId = snowball.id;
+
         const splitZ = snowball.z;
         const baseX = snowball.baseX;
         const fragScale = Math.max(FRAGMENT_SCALE_RATIO, snowball.scale * FRAGMENT_SCALE_RATIO);
@@ -434,6 +436,9 @@
 
         // Remove the parent first (keeps loop safe while iterating backwards)
         snowballs.splice(i, 1);
+
+        // Track this as a single "fracturer encounter" that resolves when both fragments pass.
+        gameState.registerFracturerSplit(parentFracturerId, 2);
 
         // Common parameters for fracture fragments
         const fragmentParams = {
@@ -451,10 +456,12 @@
         gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
           ...fragmentParams,
           baseX: leftX,
+          parentFracturerId,
         });
         gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
           ...fragmentParams,
           baseX: rightX,
+          parentFracturerId,
         });
         continue;
       }
@@ -482,7 +489,11 @@
       // 2. IMMEDIATE CLEANUP - Remove if past player (prevents ghost collisions)
       // This happens BEFORE collision check for balls that have passed
       if (snowball.z > CLEANUP_Z) {
-		gameState.recordDodge(snowball.profile);
+  		if (snowball.profile === 'FRAGMENT' && snowball.parentFracturerId !== undefined) {
+  			gameState.recordFracturerFragmentPassed(snowball.parentFracturerId);
+  		} else {
+  			gameState.recordDodge(snowball.profile);
+  		}
         snowballs.splice(i, 1);
         continue; // Skip collision check for removed snowball
       }

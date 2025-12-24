@@ -11,6 +11,7 @@
  */
 
 import { getContext, setContext } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import { DifficultyManager, type DifficultyPreset } from './difficulty.svelte';
 import { SnowballSpawner } from './spawner.svelte';
 import { CollisionDetector } from './collision.svelte';
@@ -40,6 +41,9 @@ export interface Snowball {
 	rotationY: number; // Visual variation: random rotation on Y axis (facing direction)
 	geometryVariant: number; // 0, 1, or 2 - index into geometry variants array
 	profile: SnowballProfile;
+
+	// Derivative behavior metadata (non-reactive, used for stats bookkeeping)
+	parentFracturerId?: number;
 
 	// Motion and behavior modifiers
 	speedMul: number;
@@ -111,6 +115,11 @@ export class GameStateManager {
 	snowballs: Snowball[] = []; // Plain objects, not reactive proxies
 	nextSnowballId: number = 1;
 
+	// Fracturer encounter bookkeeping (non-reactive)
+	// FRACTURER parents are removed when they split, so we count them as "dodged"
+	// only if all resulting fragments pass the player without collision.
+	fracturerEncounters: SvelteMap<number, number> = new SvelteMap();
+
 	// Timing state - non-reactive for performance
 	lastSpawnTime: number = 0;
 	lastLaneIndex: number = -1;
@@ -179,6 +188,7 @@ export class GameStateManager {
 		this.playerVelocityX = 0;
 		this.snowballs = [];
 		this.nextSnowballId = 1;
+		this.fracturerEncounters = new SvelteMap();
 		this.lastSpawnTime = 0;
 		this.lastLaneIndex = -1;
 		this.sameLaneCount = 0;
@@ -239,6 +249,23 @@ export class GameStateManager {
 		else if (profile === 'FRACTURER') this.dodgedFracturers += 1;
 		else if (profile === 'VORTEX') this.dodgedVortex += 1;
 		else if (profile === 'HEAVY') this.dodgedHeavies += 1;
+	}
+
+	registerFracturerSplit(parentFracturerId: number, fragmentCount: number) {
+		if (fragmentCount <= 0) return;
+		this.fracturerEncounters.set(parentFracturerId, fragmentCount);
+	}
+
+	recordFracturerFragmentPassed(parentFracturerId: number) {
+		const remaining = this.fracturerEncounters.get(parentFracturerId);
+		if (remaining === undefined) return;
+		const nextRemaining = remaining - 1;
+		if (nextRemaining <= 0) {
+			this.fracturerEncounters.delete(parentFracturerId);
+			this.recordDodge('FRACTURER');
+		} else {
+			this.fracturerEncounters.set(parentFracturerId, nextRemaining);
+		}
 	}
 
 	tryStartJump(now: number = this.timePlayed) {
@@ -313,6 +340,7 @@ export class GameStateManager {
 			wobbleMul?: number;
 			hopMul?: number;
 			baseX?: number;
+			parentFracturerId?: number;
 			vortexAmp?: number;
 			vortexFreq?: number;
 			vortexPhase?: number;
@@ -332,6 +360,7 @@ export class GameStateManager {
 			rotationY,
 			geometryVariant,
 			profile: options?.profile ?? 'STANDARD',
+			parentFracturerId: options?.parentFracturerId,
 			speedMul: options?.speedMul ?? 1.0,
 			collisionRadiusMul: options?.collisionRadiusMul ?? 1.0,
 			wobbleMul: options?.wobbleMul ?? 1.0,
