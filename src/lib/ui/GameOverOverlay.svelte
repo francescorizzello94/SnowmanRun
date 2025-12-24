@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { getGameState } from '$lib/game';
   
   // Dependency injection: retrieve game state from context
@@ -9,6 +10,22 @@
   function handleRestart() {
     gameState.startGame();
   }
+
+  function handleGlobalKeyDown(e: KeyboardEvent) {
+    if (gameState.state !== 'GAMEOVER') return;
+
+    if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      handleRestart();
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  });
 </script>
 
 {#if gameState.state === 'GAMEOVER'}
@@ -47,7 +64,7 @@
         </div>
       </div>
       
-      <button onclick={handleRestart}>Play Again</button>
+      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleRestart} autofocus>Play Again</button>
     </div>
   </div>
 {/if}
