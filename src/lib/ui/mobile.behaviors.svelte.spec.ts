@@ -42,8 +42,8 @@ describe('mobile UI behaviors', () => {
 		if (!valueEl) throw new Error('Expected HUD value element');
 		const fontSizePx = parseFloat(getComputedStyle(valueEl).fontSize);
 
-		// Desktop HUD uses 1.55rem; mobile media query sets ~1.25rem.
-		expect(fontSizePx).toBeLessThanOrEqual(22);
+		// Desktop HUD uses 1.55rem; mobile media query sets ~1.05rem.
+		expect(fontSizePx).toBeLessThanOrEqual(19);
 
 		const hudEl = document.querySelector('.hud') as HTMLElement | null;
 		if (!hudEl) throw new Error('Expected HUD root');

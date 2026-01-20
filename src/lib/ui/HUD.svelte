@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { getGameState } from '$lib/game';
   import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
   
@@ -6,6 +7,26 @@
   const gameState = getGameState();
 
   const presets: DifficultyPreset[] = ['EASY', 'NORMAL', 'HARD', 'INSANE'];
+
+  let isCompact = $state(false);
+  let controlsOpen = $state(true);
+
+  function updateCompact() {
+    if (typeof window === 'undefined') return;
+    const nextCompact = window.matchMedia('(max-width: 520px)').matches;
+    isCompact = nextCompact;
+    controlsOpen = !nextCompact;
+  }
+
+  onMount(() => {
+    updateCompact();
+    window.addEventListener('resize', updateCompact);
+    window.addEventListener('orientationchange', updateCompact);
+    return () => {
+      window.removeEventListener('resize', updateCompact);
+      window.removeEventListener('orientationchange', updateCompact);
+    };
+  });
 
   function setPreset(preset: DifficultyPreset) {
     gameState.setDifficultyPreset(preset);
@@ -24,8 +45,8 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 {#if gameState.state === 'PLAYING'}
-  <div class="hud">
-    <div class="stat stat-stack" aria-label="Run stats">
+  <div class="hud" class:compact={isCompact}>
+    <div class="stat stat-stack" class:stat-compact={isCompact} aria-label="Run stats">
       <div class="metric">
         <span class="label">Distance</span>
         <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
@@ -36,28 +57,42 @@
       </div>
     </div>
 
-    <div class="controls" aria-label="Difficulty and snow controls">
-      <div class="control-row">
-        <span class="label">Difficulty</span>
-        <div class="buttons" role="group" aria-label="Difficulty presets">
-          {#each presets as preset}
-            <button
-              type="button"
-              class:selected={gameState.difficultyPreset === preset}
-              on:click={() => setPreset(preset)}
-            >
-              {preset}
-            </button>
-          {/each}
-        </div>
-      </div>
+    {#if isCompact}
+      <button
+        type="button"
+        class="settings"
+        aria-label={controlsOpen ? 'Hide HUD settings' : 'Show HUD settings'}
+        aria-expanded={controlsOpen}
+        onclick={() => (controlsOpen = !controlsOpen)}
+      >
+        ⚙
+      </button>
+    {/if}
 
-      <label class="toggle">
-        <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
-        <span class="label">Snowfall</span>
-      </label>
-      <div class="hint">Hotkeys: 1–4</div>
-    </div>
+    {#if !isCompact || controlsOpen}
+      <div class="controls" aria-label="Difficulty and snow controls">
+        <div class="control-row">
+          <span class="label">Difficulty</span>
+          <div class="buttons" role="group" aria-label="Difficulty presets">
+            {#each presets as preset (preset)}
+              <button
+                type="button"
+                class:selected={gameState.difficultyPreset === preset}
+                onclick={() => setPreset(preset)}
+              >
+                {preset}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <label class="toggle">
+          <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
+          <span class="label">Snowfall</span>
+        </label>
+        <div class="hint">Hotkeys: 1–4</div>
+      </div>
+    {/if}
   </div>
 
   {#if gameState.milestoneText && gameState.timePlayed < gameState.milestoneExpiresAt}
@@ -79,6 +114,16 @@
     pointer-events: none;
     z-index: 10;
   }
+
+  .hud.compact {
+    left: 0.75rem;
+    right: 0.75rem;
+    top: calc(0.65rem + env(safe-area-inset-top));
+    transform: none;
+    align-items: flex-start;
+    gap: 0.55rem;
+    pointer-events: auto;
+  }
   
   .stat {
     display: flex;
@@ -98,6 +143,27 @@
     min-height: 6.4rem;
   }
 
+  .stat-compact {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    min-width: 0;
+    min-height: auto;
+    padding: 0.35rem 0.65rem;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .stat-compact .metric {
+    flex: 1 1 0;
+    align-items: flex-start;
+  }
+
+  .stat-compact .metric:last-child {
+    align-items: flex-end;
+  }
+
   .metric {
     display: flex;
     flex-direction: column;
@@ -115,6 +181,29 @@
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     min-width: 18rem;
+  }
+
+  .settings {
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(0, 0, 0, 0.42);
+    color: #fff;
+    width: 2.55rem;
+    height: 2.55rem;
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    font-size: 1.25rem;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .settings:active {
+    transform: scale(0.98);
   }
 
   .control-row {
@@ -172,88 +261,65 @@
   .milestone {
     position: fixed;
     left: 50%;
-    top: 45%;
-    transform: translate(-50%, -50%);
+    top: calc(5.25rem + env(safe-area-inset-top));
+    transform: translateX(-50%);
     z-index: 50;
     pointer-events: none;
-    padding: 0.9rem 1.25rem;
-    border-radius: 14px;
-    background: rgba(0, 0, 0, 0.78);
+    padding: 0.55rem 0.85rem;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.66);
     color: #ffffff;
-    font-size: 2.1rem;
+    font-size: 1.25rem;
     font-weight: 900;
-    letter-spacing: 1px;
+    letter-spacing: 0.6px;
     text-transform: uppercase;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
-    animation: milestoneFlash 0.85s ease-out;
+    animation: milestoneToast 0.85s ease-out;
   }
 
-  @keyframes milestoneFlash {
+  @keyframes milestoneToast {
     0% {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.98);
+      transform: translateX(-50%) translateY(-4px);
     }
     12% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1.04);
+      transform: translateX(-50%) translateY(0px);
     }
     70% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translateX(-50%) translateY(0px);
     }
     100% {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.98);
+      transform: translateX(-50%) translateY(-2px);
     }
   }
 
   @media (max-width: 520px) {
-    .hud {
-      left: 0.75rem;
-      right: 0.75rem;
-      top: calc(0.75rem + env(safe-area-inset-top));
-      transform: none;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.75rem;
+    .value {
+      font-size: 1.05rem;
     }
 
-    .stat,
+    .label {
+      font-size: 0.65rem;
+    }
+
     .controls {
       min-width: 0;
       width: 100%;
     }
 
-    .stat {
-      padding: 0.45rem 0.75rem;
-      border-radius: 12px;
-    }
-
-    .stat-stack {
-      min-height: 5.3rem;
-    }
-
-    .value {
-      font-size: 1.25rem;
-    }
-
-    .label {
-      font-size: 0.7rem;
-    }
-
-    .controls {
-      padding: 0.65rem 0.75rem;
-      border-radius: 12px;
-    }
-
-    button {
-      font-size: 0.78rem;
-      padding: 0.25rem 0.45rem;
-    }
-
     .milestone {
-      font-size: 1.45rem;
-      padding: 0.75rem 1rem;
+      top: calc(3.75rem + env(safe-area-inset-top));
+      font-size: 0.95rem;
+      padding: 0.45rem 0.7rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .milestone {
+      animation: none;
     }
   }
 </style>
