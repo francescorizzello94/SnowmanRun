@@ -113,6 +113,39 @@ export class GameStateManager {
 	playerX: number = 0; // Updated every frame via physics loop
 	playerVelocityX: number = 0; // Updated every frame via acceleration
 
+	// INPUT INTENT (non-reactive)
+	// Keyboard + touch should both write to these fields.
+	// The render/physics loop reads them without triggering reactivity.
+	private digitalLeftHeld: boolean = false;
+	private digitalRightHeld: boolean = false;
+	private analogActive: boolean = false;
+	private analogAxisX: number = 0; // [-1, 1]
+
+	setDigitalLeftHeld(held: boolean) {
+		this.digitalLeftHeld = held;
+	}
+
+	setDigitalRightHeld(held: boolean) {
+		this.digitalRightHeld = held;
+	}
+
+	setAnalogAxisX(axis: number) {
+		this.analogActive = true;
+		this.analogAxisX = Math.max(-1, Math.min(1, axis));
+	}
+
+	clearAnalogAxis() {
+		this.analogActive = false;
+		this.analogAxisX = 0;
+	}
+
+	getMoveAxisX(): number {
+		if (this.analogActive) return this.analogAxisX;
+		const left = this.digitalLeftHeld ? 1 : 0;
+		const right = this.digitalRightHeld ? 1 : 0;
+		return right - left;
+	}
+
 	// Snowball pool - maintained as raw array for O(1) updates
 	// CRITICAL: Direct property updates (snowball.z += delta) avoid array searches
 	snowballs: Snowball[] = []; // Plain objects, not reactive proxies
@@ -201,6 +234,10 @@ export class GameStateManager {
 		// Reset engine state
 		this.playerX = 0;
 		this.playerVelocityX = 0;
+		this.digitalLeftHeld = false;
+		this.digitalRightHeld = false;
+		this.analogActive = false;
+		this.analogAxisX = 0;
 		this.snowballs = [];
 		this.nextSnowballId = 1;
 		this.fracturerEncounters = new SvelteMap();

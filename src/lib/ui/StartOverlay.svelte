@@ -367,4 +367,31 @@
     font-size: 1rem;
     color: #777;
   }
+
+  @media (max-width: 540px), (max-height: 740px) {
+    .overlay {
+      align-items: flex-start;
+      padding: calc(0.75rem + env(safe-area-inset-top))
+        calc(0.75rem + env(safe-area-inset-right))
+        calc(0.75rem + env(safe-area-inset-bottom))
+        calc(0.75rem + env(safe-area-inset-left));
+    }
+
+    .content {
+      width: min(30rem, 100%);
+      max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow: auto;
+      padding: 1.6rem 1.1rem;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+    }
+
+    button {
+      width: 100%;
+      font-size: 1.25rem;
+      padding: 0.9rem 1.25rem;
+    }
+  }
 </style>

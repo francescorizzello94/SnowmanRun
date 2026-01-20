@@ -280,4 +280,42 @@
     outline: 2px solid rgba(44, 95, 141, 0.6);
     outline-offset: 3px;
   }
+
+  @media (max-width: 540px), (max-height: 740px) {
+    .overlay {
+      align-items: flex-start;
+      padding: calc(0.75rem + env(safe-area-inset-top))
+        calc(0.75rem + env(safe-area-inset-right))
+        calc(0.75rem + env(safe-area-inset-bottom))
+        calc(0.75rem + env(safe-area-inset-left));
+    }
+
+    h1 {
+      font-size: 2.2rem;
+    }
+
+    .score-display {
+      flex-direction: column;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+
+    .value {
+      font-size: 2.1rem;
+    }
+
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .actions {
+      margin-top: 1.25rem;
+    }
+
+    button {
+      width: min(22rem, 100%);
+      font-size: 1.25rem;
+      padding: 0.9rem 1.25rem;
+    }
+  }
 </style>

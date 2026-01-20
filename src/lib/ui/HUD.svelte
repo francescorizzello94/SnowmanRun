@@ -70,7 +70,7 @@
 <style>
   .hud {
     position: fixed;
-    top: 1rem;
+    top: calc(1rem + env(safe-area-inset-top));
     left: 50%;
     transform: translateX(-50%) scale(0.85);
     transform-origin: top center;
@@ -204,6 +204,28 @@
     100% {
       opacity: 0;
       transform: translate(-50%, -50%) scale(0.98);
+    }
+  }
+
+  @media (max-width: 520px) {
+    .hud {
+      left: 0.75rem;
+      right: 0.75rem;
+      top: calc(0.75rem + env(safe-area-inset-top));
+      transform: none;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .stat,
+    .controls {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .controls {
+      padding: 0.7rem 0.8rem;
     }
   }
 </style>
