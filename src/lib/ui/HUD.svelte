@@ -224,8 +224,36 @@
       width: 100%;
     }
 
+    .stat {
+      padding: 0.45rem 0.75rem;
+      border-radius: 12px;
+    }
+
+    .stat-stack {
+      min-height: 5.3rem;
+    }
+
+    .value {
+      font-size: 1.25rem;
+    }
+
+    .label {
+      font-size: 0.7rem;
+    }
+
     .controls {
-      padding: 0.7rem 0.8rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 12px;
+    }
+
+    button {
+      font-size: 0.78rem;
+      padding: 0.25rem 0.45rem;
+    }
+
+    .milestone {
+      font-size: 1.45rem;
+      padding: 0.75rem 1rem;
     }
   }
 </style>

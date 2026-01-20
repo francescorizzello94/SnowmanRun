@@ -91,6 +91,7 @@
     justify-content: center;
     pointer-events: none;
     z-index: 100;
+		touch-action: auto;
   }
   
   .gameover-overlay {
@@ -110,6 +111,7 @@
   .content {
     text-align: center;
     pointer-events: auto;
+		touch-action: pan-y;
   }
   
   h1 {
@@ -288,6 +290,14 @@
         calc(0.75rem + env(safe-area-inset-right))
         calc(0.75rem + env(safe-area-inset-bottom))
         calc(0.75rem + env(safe-area-inset-left));
+    }
+
+    .content {
+      width: min(30rem, 100%);
+      max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
     }
 
     h1 {
