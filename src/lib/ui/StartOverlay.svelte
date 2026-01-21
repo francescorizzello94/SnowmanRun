@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleStart} autofocus>Click to Play</button>
+      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleStart}>Click to Play</button>
       <p class="key-hint">Press <strong>Space</strong> or <strong>Enter</strong> to start</p>
       {#if gameState.bestScore > 0}
         <p class="best-score">Best Score: {gameState.bestScore.toFixed(1)}</p>
