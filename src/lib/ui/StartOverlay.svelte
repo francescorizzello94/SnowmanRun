@@ -4,6 +4,13 @@
   
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
+
+  let isTouchLike = $state(false);
+
+  function updateIsTouchLike() {
+    if (typeof window === 'undefined') return;
+    isTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+  }
   
   function handleStart() {
     gameState.startGame();
@@ -20,8 +27,13 @@
 
   onMount(() => {
     window.addEventListener('keydown', handleGlobalKeyDown);
+		updateIsTouchLike();
+		const mql = window.matchMedia('(pointer: coarse), (hover: none)');
+		const onChange = () => updateIsTouchLike();
+		mql.addEventListener('change', onChange);
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
+		mql.removeEventListener('change', onChange);
     };
   });
 </script>
@@ -60,6 +72,10 @@
               <span class="keys">
                 <span class="key">A</span><span class="key">D</span>
               </span>
+					{#if isTouchLike}
+						<span class="or">or</span>
+						<span class="note">Touch + drag left/right</span>
+					{/if}
             </span>
           </div>
 
@@ -73,6 +89,10 @@
               <span class="keys">
                 <span class="key">↑</span>
               </span>
+					{#if isTouchLike}
+						<span class="or">or</span>
+						<span class="note">Swipe up</span>
+					{/if}
               <span class="note">(clears all snowballs except Heavies)</span>
             </span>
           </div>

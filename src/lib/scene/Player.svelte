@@ -44,8 +44,6 @@
       // Immediate drop to ground on demand.
       visualY = 0;
       yVel = 0;
-    } else if (e.key === 'x' || e.key === 'X') {
-      gameState.tryActivateFrostBurst(gameState.playerX, PLAYER_Z);
     }
   }
   

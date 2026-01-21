@@ -82,16 +82,17 @@
 <style>
   .overlay {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: 100vw;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: none;
     z-index: 100;
 		touch-action: auto;
+		box-sizing: border-box;
   }
   
   .gameover-overlay {
@@ -112,6 +113,7 @@
     text-align: center;
     pointer-events: auto;
 		touch-action: pan-y;
+		box-sizing: border-box;
   }
   
   h1 {

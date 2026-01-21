@@ -13,7 +13,12 @@
 
   function updateCompact() {
     if (typeof window === 'undefined') return;
-    const nextCompact = window.matchMedia('(max-width: 520px)').matches;
+    // Some mobile devices report unexpectedly large CSS widths; prefer input capability
+    // and height constraints over width-only checks.
+    const isTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+    const isNarrow = window.matchMedia('(max-width: 520px)').matches;
+    const isShort = window.matchMedia('(max-height: 520px)').matches;
+    const nextCompact = isTouchLike || isNarrow || isShort;
     isCompact = nextCompact;
     controlsOpen = !nextCompact;
   }
