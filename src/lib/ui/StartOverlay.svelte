@@ -145,15 +145,16 @@
 <style>
   .overlay {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: 100vw;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: none;
     z-index: 10;
+		box-sizing: border-box;
   }
   
   .start-overlay {
@@ -167,6 +168,8 @@
     padding: 3rem 4rem;
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+		box-sizing: border-box;
+		max-width: 100%;
   }
   
   .content.error {
