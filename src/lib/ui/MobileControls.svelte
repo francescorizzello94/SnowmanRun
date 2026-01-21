@@ -87,6 +87,14 @@
 		endGesture();
 	}
 
+	// If a run ends while a pointer is still down, some browsers won't dispatch
+	// a clean pointerup/cancel. Clear any stuck gesture so the next run works.
+	$effect(() => {
+		if (gameState.state !== 'PLAYING') {
+			endGesture();
+		}
+	});
+
 	onMount(() => {
 		updateIsMobile();
 		if (typeof window === 'undefined') return;
@@ -94,7 +102,19 @@
 		const mql = window.matchMedia('(pointer: coarse), (hover: none)');
 		const onChange = () => updateIsMobile();
 		mql.addEventListener('change', onChange);
-		return () => mql.removeEventListener('change', onChange);
+
+		const onBlur = () => endGesture();
+		const onVisibility = () => {
+			if (document.visibilityState !== 'visible') endGesture();
+		};
+		window.addEventListener('blur', onBlur);
+		document.addEventListener('visibilitychange', onVisibility);
+
+		return () => {
+			mql.removeEventListener('change', onChange);
+			window.removeEventListener('blur', onBlur);
+			document.removeEventListener('visibilitychange', onVisibility);
+		};
 	});
 
 	onDestroy(() => {

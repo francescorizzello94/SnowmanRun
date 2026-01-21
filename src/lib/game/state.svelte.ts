@@ -167,7 +167,6 @@ export class GameStateManager {
 	jumpInvulnEndTime: number = -1e9;
 	jumpCooldownEndTime: number = 0;
 
-
 	// Milestone tracking (non-reactive, driven by the single per-frame loop)
 	lastDistanceMilestone: number = 0;
 	lastTimeMilestoneIndex: number = 0;
