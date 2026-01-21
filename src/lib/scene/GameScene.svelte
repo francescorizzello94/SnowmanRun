@@ -35,11 +35,18 @@
 
 <style>
   .scene-container {
-    width: 100vw;
-    height: 100vh;
+    width: 100dvw;
+    height: 100dvh;
     position: fixed;
     top: 0;
     left: 0;
     z-index: 1;
+  }
+
+  @supports not (height: 100dvh) {
+    .scene-container {
+      width: 100vw;
+      height: 100vh;
+    }
   }
 </style>

@@ -82,15 +82,17 @@
 <style>
   .overlay {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: 100vw;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: none;
     z-index: 100;
+		touch-action: auto;
+		box-sizing: border-box;
   }
   
   .gameover-overlay {
@@ -110,6 +112,8 @@
   .content {
     text-align: center;
     pointer-events: auto;
+		touch-action: pan-y;
+		box-sizing: border-box;
   }
   
   h1 {
@@ -279,5 +283,51 @@
   .coffee:focus-visible {
     outline: 2px solid rgba(44, 95, 141, 0.6);
     outline-offset: 3px;
+  }
+
+  @media (max-width: 540px), (max-height: 740px) {
+    .overlay {
+      align-items: flex-start;
+      padding: calc(0.75rem + env(safe-area-inset-top))
+        calc(0.75rem + env(safe-area-inset-right))
+        calc(0.75rem + env(safe-area-inset-bottom))
+        calc(0.75rem + env(safe-area-inset-left));
+    }
+
+    .content {
+      width: min(30rem, 100%);
+      max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    }
+
+    h1 {
+      font-size: 2.2rem;
+    }
+
+    .score-display {
+      flex-direction: column;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+
+    .value {
+      font-size: 2.1rem;
+    }
+
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .actions {
+      margin-top: 1.25rem;
+    }
+
+    button {
+      width: min(22rem, 100%);
+      font-size: 1.25rem;
+      padding: 0.9rem 1.25rem;
+    }
   }
 </style>

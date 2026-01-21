@@ -7,6 +7,7 @@
   import GameScene from './GameScene.svelte';
   import StartOverlay from '$lib/ui/StartOverlay.svelte';
   import HUD from '$lib/ui/HUD.svelte';
+  import MobileControls from '$lib/ui/MobileControls.svelte';
   import GameOverOverlay from '$lib/ui/GameOverOverlay.svelte';
   
   // Initialize context-scoped game state
@@ -17,6 +18,7 @@
   <GameScene />
   <StartOverlay />
   <HUD />
+  <MobileControls />
   <GameOverOverlay />
 </div>
 

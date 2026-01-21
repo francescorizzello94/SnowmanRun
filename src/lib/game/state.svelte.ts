@@ -104,14 +104,44 @@ export class GameStateManager {
 	dodgedVortex = $state(0);
 	dodgedHeavies = $state(0);
 
-	// Power-up charges (reactive, shown in HUD)
-	frostBurstCharges = $state(0);
-
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
 	// to minimize main-thread jank. Svelte's $state overhead would cause dropped frames.
 	playerX: number = 0; // Updated every frame via physics loop
 	playerVelocityX: number = 0; // Updated every frame via acceleration
+
+	// INPUT INTENT (non-reactive)
+	// Keyboard + touch should both write to these fields.
+	// The render/physics loop reads them without triggering reactivity.
+	private digitalLeftHeld: boolean = false;
+	private digitalRightHeld: boolean = false;
+	private analogActive: boolean = false;
+	private analogAxisX: number = 0; // [-1, 1]
+
+	setDigitalLeftHeld(held: boolean) {
+		this.digitalLeftHeld = held;
+	}
+
+	setDigitalRightHeld(held: boolean) {
+		this.digitalRightHeld = held;
+	}
+
+	setAnalogAxisX(axis: number) {
+		this.analogActive = true;
+		this.analogAxisX = Math.max(-1, Math.min(1, axis));
+	}
+
+	clearAnalogAxis() {
+		this.analogActive = false;
+		this.analogAxisX = 0;
+	}
+
+	getMoveAxisX(): number {
+		if (this.analogActive) return this.analogAxisX;
+		const left = this.digitalLeftHeld ? 1 : 0;
+		const right = this.digitalRightHeld ? 1 : 0;
+		return right - left;
+	}
 
 	// Snowball pool - maintained as raw array for O(1) updates
 	// CRITICAL: Direct property updates (snowball.z += delta) avoid array searches
@@ -136,13 +166,6 @@ export class GameStateManager {
 	jumpInvulnStartTime: number = -1e9;
 	jumpInvulnEndTime: number = -1e9;
 	jumpCooldownEndTime: number = 0;
-
-	// Frost Burst milestone tracking + event trigger
-	lastFrostBurstAwardIndex: number = 0;
-	frostBurstSeq: number = 0;
-	frostBurstTime: number = 0;
-	frostBurstX: number = 0;
-	frostBurstZ: number = 0;
 
 	// Milestone tracking (non-reactive, driven by the single per-frame loop)
 	lastDistanceMilestone: number = 0;
@@ -201,6 +224,10 @@ export class GameStateManager {
 		// Reset engine state
 		this.playerX = 0;
 		this.playerVelocityX = 0;
+		this.digitalLeftHeld = false;
+		this.digitalRightHeld = false;
+		this.analogActive = false;
+		this.analogAxisX = 0;
 		this.snowballs = [];
 		this.nextSnowballId = 1;
 		this.fracturerEncounters = new SvelteMap();
@@ -220,11 +247,6 @@ export class GameStateManager {
 		this.jumpInvulnStartTime = -1e9;
 		this.jumpInvulnEndTime = -1e9;
 		this.jumpCooldownEndTime = 0;
-		this.lastFrostBurstAwardIndex = 0;
-		this.frostBurstSeq = 0;
-		this.frostBurstTime = 0;
-		this.frostBurstX = 0;
-		this.frostBurstZ = 0;
 
 		// Reset reactive UI state
 		this.milestoneText = null;
@@ -233,7 +255,6 @@ export class GameStateManager {
 		this.dodgedFracturers = 0;
 		this.dodgedVortex = 0;
 		this.dodgedHeavies = 0;
-		this.frostBurstCharges = 0;
 	}
 
 	registerTerrainResetHook(fn: () => void) {
@@ -310,17 +331,6 @@ export class GameStateManager {
 		// Immediate landing: stop arc and remove invulnerability.
 		this.jumpEndTime = Math.min(this.jumpEndTime, now);
 		this.jumpInvulnEndTime = Math.min(this.jumpInvulnEndTime, now);
-	}
-
-	tryActivateFrostBurst(playerX: number, playerZ: number, now: number = this.timePlayed) {
-		if (this.state !== 'PLAYING') return;
-		if (this.frostBurstCharges <= 0) return;
-		this.frostBurstCharges -= 1;
-		this.frostBurstSeq += 1;
-		this.frostBurstTime = now;
-		this.frostBurstX = playerX;
-		this.frostBurstZ = playerZ;
-		this.queueMilestone('FROST BURST!');
 	}
 
 	setDifficultyPreset(preset: DifficultyPreset) {

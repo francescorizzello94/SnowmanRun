@@ -19,10 +19,6 @@
   const GROUND_Y = -0.01; // Matches SnowGround's Y
   const GROUND_SINK = 0.02; // Slightly embed into snow for contact
   
-  // Input tracking
-  let leftPressed = $state(false);
-  let rightPressed = $state(false);
-  
   // Visual position (lerped for smooth rendering) - reactive for template binding
   let visualX = $state(0);
   let visualY = $state(0);
@@ -36,9 +32,9 @@
     if (gameState.state !== 'PLAYING') return;
     
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-      leftPressed = true;
+      gameState.setDigitalLeftHeld(true);
     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-      rightPressed = true;
+      gameState.setDigitalRightHeld(true);
     } else if (e.key === ' ' || e.code === 'Space') {
       gameState.tryStartJump();
     } else if (e.key === 'ArrowUp') {
@@ -48,16 +44,14 @@
       // Immediate drop to ground on demand.
       visualY = 0;
       yVel = 0;
-    } else if (e.key === 'x' || e.key === 'X') {
-      gameState.tryActivateFrostBurst(gameState.playerX, PLAYER_Z);
     }
   }
   
   function handleKeyUp(e: KeyboardEvent) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-      leftPressed = false;
+      gameState.setDigitalLeftHeld(false);
     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-      rightPressed = false;
+      gameState.setDigitalRightHeld(false);
     }
   }
   
@@ -79,10 +73,7 @@
     // KINEMATIC INPUT: World-based mapping
     // Left  => decrease X
     // Right => increase X
-    let inputDirection = 0;
-    if (leftPressed && !rightPressed) inputDirection = -1;  // Left only
-    if (rightPressed && !leftPressed) inputDirection = 1; // Right only
-    // If both pressed: inputDirection stays 0 (deadzone)
+    const inputDirection = gameState.getMoveAxisX();
     
     // Update logical position instantly (used for collision)
     gameState.playerX += inputDirection * MOVE_SPEED * delta;

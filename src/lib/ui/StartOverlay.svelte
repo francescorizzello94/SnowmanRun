@@ -4,6 +4,13 @@
   
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
+
+  let isTouchLike = $state(false);
+
+  function updateIsTouchLike() {
+    if (typeof window === 'undefined') return;
+    isTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+  }
   
   function handleStart() {
     gameState.startGame();
@@ -20,8 +27,13 @@
 
   onMount(() => {
     window.addEventListener('keydown', handleGlobalKeyDown);
+		updateIsTouchLike();
+		const mql = window.matchMedia('(pointer: coarse), (hover: none)');
+		const onChange = () => updateIsTouchLike();
+		mql.addEventListener('change', onChange);
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
+		mql.removeEventListener('change', onChange);
     };
   });
 </script>
@@ -60,6 +72,10 @@
               <span class="keys">
                 <span class="key">A</span><span class="key">D</span>
               </span>
+					{#if isTouchLike}
+						<span class="or">or</span>
+						<span class="note">Touch + drag left/right</span>
+					{/if}
             </span>
           </div>
 
@@ -73,6 +89,10 @@
               <span class="keys">
                 <span class="key">↑</span>
               </span>
+					{#if isTouchLike}
+						<span class="or">or</span>
+						<span class="note">Swipe up</span>
+					{/if}
               <span class="note">(clears all snowballs except Heavies)</span>
             </span>
           </div>
@@ -113,7 +133,7 @@
         </div>
       </div>
 
-      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleStart} autofocus>Click to Play</button>
+      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleStart}>Click to Play</button>
       <p class="key-hint">Press <strong>Space</strong> or <strong>Enter</strong> to start</p>
       {#if gameState.bestScore > 0}
         <p class="best-score">Best Score: {gameState.bestScore.toFixed(1)}</p>
@@ -125,15 +145,16 @@
 <style>
   .overlay {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: 100vw;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: none;
     z-index: 10;
+		box-sizing: border-box;
   }
   
   .start-overlay {
@@ -147,6 +168,8 @@
     padding: 3rem 4rem;
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+		box-sizing: border-box;
+		max-width: 100%;
   }
   
   .content.error {
@@ -366,5 +389,32 @@
     margin-top: 0.75rem;
     font-size: 1rem;
     color: #777;
+  }
+
+  @media (max-width: 540px), (max-height: 740px) {
+    .overlay {
+      align-items: flex-start;
+      padding: calc(0.75rem + env(safe-area-inset-top))
+        calc(0.75rem + env(safe-area-inset-right))
+        calc(0.75rem + env(safe-area-inset-bottom))
+        calc(0.75rem + env(safe-area-inset-left));
+    }
+
+    .content {
+      width: min(30rem, 100%);
+      max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow: auto;
+      padding: 1.6rem 1.1rem;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+    }
+
+    button {
+      width: 100%;
+      font-size: 1.25rem;
+      padding: 0.9rem 1.25rem;
+    }
   }
 </style>
