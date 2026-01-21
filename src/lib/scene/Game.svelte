@@ -8,7 +8,6 @@
   import StartOverlay from '$lib/ui/StartOverlay.svelte';
   import HUD from '$lib/ui/HUD.svelte';
   import MobileControls from '$lib/ui/MobileControls.svelte';
-  import RotateOverlay from '$lib/ui/RotateOverlay.svelte';
   import GameOverOverlay from '$lib/ui/GameOverOverlay.svelte';
   
   // Initialize context-scoped game state
@@ -19,7 +18,6 @@
   <GameScene />
   <StartOverlay />
   <HUD />
-  <RotateOverlay />
   <MobileControls />
   <GameOverOverlay />
 </div>

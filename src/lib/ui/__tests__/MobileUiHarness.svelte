@@ -2,9 +2,8 @@
 	import { createGameState } from '$lib/game';
 	import HUD from '$lib/ui/HUD.svelte';
 	import GameOverOverlay from '$lib/ui/GameOverOverlay.svelte';
-	import RotateOverlay from '$lib/ui/RotateOverlay.svelte';
 
-	export type MobileUiHarnessMode = 'HUD' | 'GAMEOVER' | 'ROTATE';
+	export type MobileUiHarnessMode = 'HUD' | 'GAMEOVER';
 
 	let { mode = 'HUD' } = $props<{ mode?: MobileUiHarnessMode }>();
 
@@ -17,12 +16,6 @@
 			gameState.timePlayed = 56.7;
 			gameState.difficultyPreset = 'NORMAL';
 			gameState.snowfallEnabled = true;
-		}
-
-		if (mode === 'ROTATE') {
-			gameState.state = 'PLAYING';
-			gameState.distanceTraveled = 1.0;
-			gameState.timePlayed = 1.0;
 		}
 
 		if (mode === 'GAMEOVER') {
@@ -39,5 +32,4 @@
 </script>
 
 <HUD />
-<RotateOverlay />
 <GameOverOverlay />

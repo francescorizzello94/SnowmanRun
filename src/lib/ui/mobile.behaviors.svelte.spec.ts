@@ -7,27 +7,6 @@ async function setViewport(width: number, height: number) {
 	await page.viewport(width, height);
 }
 
-async function forceCoarsePointerMatchMedia() {
-	const original = window.matchMedia.bind(window);
-	window.matchMedia = (query: string) => {
-		const matches =
-			query.includes('pointer: coarse') || query.includes('hover: none') || original(query).matches;
-
-		return {
-			matches,
-			media: query,
-			onchange: null,
-			addEventListener() {},
-			removeEventListener() {},
-			addListener() {},
-			removeListener() {},
-			dispatchEvent() {
-				return false;
-			}
-		} as MediaQueryList;
-	};
-}
-
 beforeEach(async () => {
 	document.body.innerHTML = '';
 });
@@ -50,29 +29,6 @@ describe('mobile UI behaviors', () => {
 		const transform = getComputedStyle(hudEl).transform;
 
 		expect(transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)').toBe(true);
-	});
-
-	it('Rotate prompt appears in portrait on mobile and can be dismissed', async () => {
-		await forceCoarsePointerMatchMedia();
-		await setViewport(390, 780); // portrait
-		render(MobileUiHarness, { mode: 'ROTATE' });
-
-		const prompt = page.getByText('Better in landscape');
-		await expect.element(prompt).toBeInTheDocument();
-
-		const playAnyway = page.getByRole('button', { name: 'Play anyway' });
-		await playAnyway.click();
-
-		await expect.element(prompt).not.toBeInTheDocument();
-	});
-
-	it('Rotate prompt hides in landscape on mobile', async () => {
-		await forceCoarsePointerMatchMedia();
-		await setViewport(780, 390); // landscape
-		render(MobileUiHarness, { mode: 'ROTATE' });
-
-		const prompt = page.getByText('Better in landscape');
-		await expect.element(prompt).not.toBeInTheDocument();
 	});
 
 	it('Game over screen is scrollable on small screens', async () => {
