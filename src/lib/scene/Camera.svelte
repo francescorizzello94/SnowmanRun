@@ -21,14 +21,14 @@
     cameraPosition.target = {
       x: gameState.playerX,
       y: 5,
-      z: 10
+      z: 10 + gameState.playerZ
     };
     
     // Update look-at target slightly ahead of player
     lookAtPosition.target = {
       x: gameState.playerX,
       y: 1,
-      z: -4
+      z: -4 + gameState.playerZ
     };
     
     // Add subtle roll based on velocity (only during gameplay)

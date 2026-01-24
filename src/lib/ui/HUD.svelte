@@ -1,10 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getGameState } from '$lib/game';
+  import { getGameState, RANKS } from '$lib/game';
   import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
-  
+
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
+
+  // Derive current rank for display
+  let currentRank = $derived(RANKS[gameState.currentRankIndex]);
+  let frostPhaseActive = $derived(gameState.isFrostPhaseActive(gameState.timePlayed));
+  let dashActive = $derived(gameState.isDashActive(gameState.timePlayed));
+  let forwardSpeed = $derived(gameState.getForwardSpeed(gameState.timePlayed));
 
   const presets: DifficultyPreset[] = ['EASY', 'NORMAL', 'HARD', 'INSANE'];
 
@@ -59,6 +65,22 @@
       <div class="metric">
         <span class="label">Time</span>
         <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
+      </div>
+      <div class="metric" class:dash-metric={dashActive}>
+        <span class="label">Speed</span>
+        <span class="value">{forwardSpeed.toFixed(1)}</span>
+        {#if dashActive}
+          <span class="dash-indicator">DASH</span>
+        {/if}
+      </div>
+      <div class="metric rank-metric">
+        <span class="label">Rank</span>
+        <span class="value rank-value" style="color: {currentRank.color}">
+          {currentRank.name}
+        </span>
+        {#if frostPhaseActive}
+          <span class="frost-indicator">FROST PHASE</span>
+        {/if}
       </div>
     </div>
 
@@ -165,8 +187,27 @@
     align-items: flex-start;
   }
 
-  .stat-compact .metric:last-child {
+  .stat-compact .metric:last-child:not(.rank-metric) {
     align-items: flex-end;
+  }
+
+  .stat-compact .rank-metric {
+    flex: 0 0 auto;
+    border-top: none;
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    padding-top: 0;
+    padding-left: 0.65rem;
+    margin-top: 0;
+    margin-left: 0.45rem;
+  }
+
+  .stat-compact .rank-value {
+    font-size: 0.75rem;
+  }
+
+  .stat-compact .frost-indicator {
+    font-size: 0.55rem;
+    padding: 0.1rem 0.3rem;
   }
 
   .metric {
@@ -256,11 +297,78 @@
     letter-spacing: 1px;
     margin-bottom: 0.15rem;
   }
-  
+
   .value {
     font-size: 1.55rem;
     font-weight: bold;
     color: #2c5f8d;
+  }
+
+  .rank-metric {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    padding-top: 0.45rem;
+    margin-top: 0.25rem;
+  }
+
+  .rank-value {
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+
+  .frost-indicator {
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    background: linear-gradient(135deg, #6ee7ff 0%, #31d3ff 100%);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    border-radius: 6px;
+    animation: frostPulse 0.5s ease-in-out infinite alternate;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  @keyframes frostPulse {
+    0% {
+      opacity: 0.85;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+
+  .dash-metric .value {
+    color: #0ea5e9;
+    font-weight: 800;
+  }
+
+  .dash-indicator {
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 100%);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.9px;
+    border-radius: 6px;
+    animation: dashPulse 0.4s ease-in-out infinite alternate;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  @keyframes dashPulse {
+    0% {
+      opacity: 0.8;
+      transform: translateY(0) scale(1);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(-1px) scale(1.04);
+    }
   }
 
   .milestone {

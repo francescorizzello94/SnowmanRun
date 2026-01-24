@@ -241,7 +241,7 @@
     if (gameState.state !== 'PLAYING') return;
 
     // Stamp at the player's ground contact position.
-    addTrailPoint(gameState.playerX, 0, gameState.timePlayed);
+    addTrailPoint(gameState.playerX, gameState.playerZ, gameState.timePlayed);
 
     // Throttle geometry work.
     accum += delta;

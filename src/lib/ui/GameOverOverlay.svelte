@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getGameState } from '$lib/game';
-  
+  import { getGameState, RANKS } from '$lib/game';
+
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
-  
+
   let isNewHighScore = $derived(gameState.distanceTraveled > 0 && gameState.distanceTraveled >= gameState.bestScore);
+  let finalRank = $derived(RANKS[gameState.currentRankIndex]);
   
   function handleRestart() {
     gameState.startGame();
@@ -46,6 +47,10 @@
           <span class="label">Time Survived</span>
           <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
         </div>
+        <div class="score-item rank-item">
+          <span class="label">Final Rank</span>
+          <span class="value rank-badge" style="color: {finalRank.color}">{finalRank.name}</span>
+        </div>
         {#if !isNewHighScore && gameState.bestScore > 0}
           <div class="score-item">
             <span class="label">Best Score</span>
@@ -61,6 +66,7 @@
           <div class="stat-row fracturer"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
           <div class="stat-row vortex"><span class="k">Vortex Dodged</span><span class="v">{gameState.dodgedVortex}</span></div>
           <div class="stat-row heavy"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
+          <div class="stat-row frost"><span class="k">Frost Phases</span><span class="v">{gameState.frostPhasesUsed}</span></div>
         </div>
       </div>
 
@@ -192,6 +198,21 @@
 
   .stat-row.heavy {
     --accent: #ffd34d;
+  }
+
+  .stat-row.frost {
+    --accent: #6ee7ff;
+  }
+
+  .rank-item {
+    border: 2px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .rank-badge {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .k {
