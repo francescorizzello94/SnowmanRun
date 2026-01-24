@@ -25,10 +25,8 @@ export type SnowballProfile = 'STANDARD' | 'SEEKER' | 'FRACTURER' | 'VORTEX' | '
  *
  * Players earn ranks based on survival time. Each rank-up:
  * - Shows a visual prestige indicator in the HUD
- * - AUTOMATICALLY triggers Frost Phase (2.5s invulnerability)
  *
- * Frost Phase provides protection against ALL snowballs (including Heavies),
- * rewarding players for surviving longer with brief moments of safety.
+ * Note: Rank-ups do not grant invulnerability; dash/jump handle survivability.
  */
 export const RANKS = [
 	{ name: 'NEWCOMER', threshold: 0, color: '#888888' },
@@ -127,7 +125,6 @@ export class GameStateManager {
 
 	// Rank-Based Progression (reactive, UI-affecting)
 	currentRankIndex = $state(0);
-	frostPhasesUsed = $state(0);
 
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
@@ -309,7 +306,6 @@ export class GameStateManager {
 		this.dodgedVortex = 0;
 		this.dodgedHeavies = 0;
 		this.currentRankIndex = 0;
-		this.frostPhasesUsed = 0;
 	}
 
 	registerTerrainResetHook(fn: () => void) {
@@ -454,15 +450,6 @@ export class GameStateManager {
 	 * Visual: Ice crystallization effect on player model
 	 */
 	private readonly FROST_PHASE_DURATION = 2.5;
-
-	private activateFrostPhase(now: number = this.timePlayed): void {
-		// Cannot stack with active frost phase
-		if (now >= this.frostPhaseStartTime && now < this.frostPhaseEndTime) return;
-
-		this.frostPhasesUsed += 1;
-		this.frostPhaseStartTime = now;
-		this.frostPhaseEndTime = now + this.FROST_PHASE_DURATION;
-	}
 
 	isFrostPhaseActive(now: number = this.timePlayed): boolean {
 		return now >= this.frostPhaseStartTime && now < this.frostPhaseEndTime;

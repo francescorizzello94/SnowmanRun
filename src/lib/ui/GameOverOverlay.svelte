@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getGameState, RANKS } from '$lib/game';
+  import RankBadge from '$lib/ui/RankBadge.svelte';
 
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
@@ -47,9 +48,8 @@
           <span class="label">Time Survived</span>
           <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
         </div>
-        <div class="score-item rank-item">
-          <span class="label">Final Rank</span>
-          <span class="value rank-badge" style="color: {finalRank.color}">{finalRank.name}</span>
+        <div class="score-item rank-item hero" aria-label="Final rank">
+          <RankBadge rankName={finalRank.name} />
         </div>
         {#if !isNewHighScore && gameState.bestScore > 0}
           <div class="score-item">
@@ -66,7 +66,6 @@
           <div class="stat-row fracturer"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
           <div class="stat-row vortex"><span class="k">Vortex Dodged</span><span class="v">{gameState.dodgedVortex}</span></div>
           <div class="stat-row heavy"><span class="k">Heavies Avoided</span><span class="v">{gameState.dodgedHeavies}</span></div>
-          <div class="stat-row frost"><span class="k">Frost Phases</span><span class="v">{gameState.frostPhasesUsed}</span></div>
         </div>
       </div>
 
@@ -94,6 +93,14 @@
     max-width: 100vw;
     display: flex;
     align-items: center;
+
+  /* Hero rank card: let the RankBadge own the visuals */
+  .score-item.rank-item.hero {
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 18px;
+  }
     justify-content: center;
     pointer-events: none;
     z-index: 100;
@@ -186,33 +193,27 @@
 
   .stat-row.seeker {
     --accent: #ff6a3d;
+    background: rgba(255, 106, 61, 0.16);
   }
 
   .stat-row.fracturer {
     --accent: #b07cff;
+    background: rgba(176, 124, 255, 0.16);
   }
 
   .stat-row.vortex {
     --accent: #31d3ff;
+    background: rgba(49, 211, 255, 0.16);
   }
 
   .stat-row.heavy {
     --accent: #ffd34d;
+    background: rgba(255, 211, 77, 0.22);
   }
 
-  .stat-row.frost {
-    --accent: #6ee7ff;
-  }
-
-  .rank-item {
-    border: 2px solid rgba(0, 0, 0, 0.08);
-  }
-
-  .rank-badge {
-    font-size: 1.6rem;
-    font-weight: 900;
-    letter-spacing: 0.5px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  .stat-row.heavy .k,
+  .stat-row.heavy .v {
+    color: #2f2206;
   }
 
   .k {
