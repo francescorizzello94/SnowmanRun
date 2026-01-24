@@ -449,7 +449,6 @@ export class GameStateManager {
 	 * Duration: 2.5s invulnerability
 	 * Visual: Ice crystallization effect on player model
 	 */
-	private readonly FROST_PHASE_DURATION = 2.5;
 
 	isFrostPhaseActive(now: number = this.timePlayed): boolean {
 		return now >= this.frostPhaseStartTime && now < this.frostPhaseEndTime;
