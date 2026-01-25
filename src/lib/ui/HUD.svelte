@@ -11,13 +11,11 @@
   let currentRank = $derived(RANKS[gameState.currentRankIndex]);
   let currentRankUi = $derived(getRankUi(currentRank.name));
   let frostPhaseActive = $derived(gameState.isFrostPhaseActive(gameState.timePlayed));
-  let dashActive = $derived(gameState.isDashActive(gameState.timePlayed));
-  let forwardSpeed = $derived(gameState.getForwardSpeed(gameState.timePlayed));
 
   const presets: DifficultyPreset[] = ['EASY', 'NORMAL', 'HARD', 'INSANE'];
 
   let isCompact = $state(false);
-  let controlsOpen = $state(true);
+  let controlsOpen = $state(false);
 
   function updateCompact() {
     if (typeof window === 'undefined') return;
@@ -28,7 +26,9 @@
     const isShort = window.matchMedia('(max-height: 520px)').matches;
     const nextCompact = isTouchLike || isNarrow || isShort;
     isCompact = nextCompact;
-    controlsOpen = !nextCompact;
+
+    // Always keep settings collapsed on compact/mobile.
+    if (nextCompact) controlsOpen = false;
   }
 
   onMount(() => {
@@ -59,85 +59,77 @@
 
 {#if gameState.state === 'PLAYING'}
   <div class="hud" class:compact={isCompact}>
-    <div class="stat stat-stack" class:stat-compact={isCompact} aria-label="Run stats">
-      <div class="metric">
-        <span class="label">Distance</span>
-        <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
-      </div>
-      <div class="metric">
-        <span class="label">Time</span>
-        <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
-      </div>
-      <div class="metric" class:dash-metric={dashActive}>
-        <span class="label">Speed</span>
-        <span class="value">{forwardSpeed.toFixed(1)}</span>
-        {#if dashActive}
-          <span class="dash-indicator">DASH</span>
-        {/if}
-      </div>
-      <div class="metric rank-metric">
-        <span class="label">Rank</span>
-        <span
-          class="value rank-icon"
-          aria-label={currentRank.name}
-          title={currentRank.name}
-          style="color: {currentRank.color}"
-        >
-          <svg
-            class="rank-icon__svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d={RANK_ICON_PATHS[currentRankUi.icon]} />
-          </svg>
-        </span>
-        {#if frostPhaseActive}
-          <span class="frost-indicator">FROST PHASE</span>
-        {/if}
-      </div>
-    </div>
-
-    {#if isCompact}
-      <button
-        type="button"
-        class="settings"
-        aria-label={controlsOpen ? 'Hide HUD settings' : 'Show HUD settings'}
-        aria-expanded={controlsOpen}
-        onclick={() => (controlsOpen = !controlsOpen)}
-      >
-        ⚙
-      </button>
-    {/if}
-
-    {#if !isCompact || controlsOpen}
-      <div class="controls" aria-label="Difficulty and snow controls">
-        <div class="control-row">
-          <span class="label">Difficulty</span>
-          <div class="buttons" role="group" aria-label="Difficulty presets">
-            {#each presets as preset (preset)}
-              <button
-                type="button"
-                class:selected={gameState.difficultyPreset === preset}
-                onclick={() => setPreset(preset)}
+    <div class="stat hud-card" aria-label="Run stats">
+      <div class="stats-row">
+        <div class="metric">
+          <span class="label">Distance</span>
+          <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
+        </div>
+        <div class="metric">
+          <span class="label">Time</span>
+          <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
+        </div>
+        <div class="metric rank-metric">
+          <span class="label">Rank</span>
+          <span class="rank-value" aria-label={currentRank.name} title={currentRank.name}>
+            <span class="rank-icon" style="color: {currentRank.color}" aria-hidden="true">
+              <svg
+                class="rank-icon__svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
               >
-                {preset}
-              </button>
-            {/each}
-          </div>
+                <path d={RANK_ICON_PATHS[currentRankUi.icon]} />
+              </svg>
+            </span>
+            <span class="rank-text" style="color: {currentRank.color}">{currentRank.name}</span>
+          </span>
+          {#if frostPhaseActive}
+            <span class="frost-indicator">FROST PHASE</span>
+          {/if}
         </div>
 
-        <label class="toggle">
-          <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
-          <span class="label">Snowfall</span>
-        </label>
-        <div class="hint">Hotkeys: 1–4</div>
+        <button
+          type="button"
+          class="metric settings-metric"
+          aria-label={controlsOpen ? 'Hide HUD settings' : 'Show HUD settings'}
+          aria-expanded={controlsOpen}
+          onclick={() => (controlsOpen = !controlsOpen)}
+        >
+          <span class="label">Settings</span>
+          <span class="value settings-icon" aria-hidden="true">⚙</span>
+        </button>
       </div>
-    {/if}
+
+      {#if controlsOpen}
+        <div class="controls" aria-label="Difficulty and snow controls">
+          <div class="control-row">
+            <span class="label">Difficulty</span>
+            <div class="buttons" role="group" aria-label="Difficulty presets">
+              {#each presets as preset (preset)}
+                <button
+                  type="button"
+                  class:selected={gameState.difficultyPreset === preset}
+                  onclick={() => setPreset(preset)}
+                >
+                  {preset}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <label class="toggle">
+            <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
+            <span class="label">Snowfall</span>
+          </label>
+          <div class="hint">Hotkeys: 1–4</div>
+        </div>
+      {/if}
+    </div>
   </div>
 
   {#if gameState.milestoneText && gameState.timePlayed < gameState.milestoneExpiresAt}
@@ -155,7 +147,6 @@
     transform: translateX(-50%) scale(0.85);
     transform-origin: top center;
     display: flex;
-    gap: 1.25rem;
     pointer-events: none;
     z-index: 10;
   }
@@ -165,61 +156,36 @@
     right: 0.75rem;
     top: calc(0.65rem + env(safe-area-inset-top));
     transform: none;
-    align-items: flex-start;
-    gap: 0.55rem;
     pointer-events: auto;
   }
   
   .stat {
+    pointer-events: auto;
+  }
+
+  .hud-card {
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     background: rgba(255, 255, 255, 0.9);
-    padding: 0.55rem 1.1rem;
+    padding: 0.45rem 0.9rem;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    min-width: 7.5rem;
+    width: min(42rem, calc(100vw - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
   }
 
-  .stat-stack {
-    align-items: stretch;
-    justify-content: space-between;
-    min-width: 9rem;
-    min-height: 6.4rem;
+  .hud.compact .hud-card {
+    width: 100%;
+    padding: 0.35rem 0.65rem;
   }
 
-  .stat-compact {
-    flex-direction: row;
+  .stats-row {
+    display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 0.85rem;
     min-width: 0;
-    min-height: auto;
-    padding: 0.35rem 0.65rem;
-    border-radius: 12px;
-    width: 100%;
-    overflow: hidden;
-  }
-
-  .stat-compact .metric {
-    flex: 1 1 0;
-    align-items: flex-start;
-    min-width: 0;
-  }
-
-  .stat-compact .metric:last-child:not(.rank-metric) {
-    align-items: flex-end;
-  }
-
-  .stat-compact .rank-metric {
-    flex: 1 1 0;
-    min-width: 0;
-    border-top: none;
-    border-left: 1px solid rgba(0, 0, 0, 0.08);
-    padding-top: 0;
-    padding-left: 0.65rem;
-    margin-top: 0;
-    margin-left: 0.45rem;
   }
 
   .rank-icon {
@@ -235,12 +201,12 @@
     height: 100%;
   }
 
-  .stat-compact .rank-icon {
+  .hud.compact .rank-icon {
     width: 1.25rem;
     height: 1.25rem;
   }
 
-  .stat-compact .frost-indicator {
+  .hud.compact .frost-indicator {
     font-size: 0.55rem;
     padding: 0.1rem 0.3rem;
   }
@@ -250,41 +216,37 @@
     flex-direction: column;
     align-items: center;
     line-height: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .metric.rank-metric {
+    flex: 1.15 1 0;
+  }
+
+  .settings-metric {
+    flex: 0 0 auto;
+    min-width: 3.25rem;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .settings-metric:focus-visible {
+    outline: 2px solid rgba(44, 95, 141, 0.6);
+    outline-offset: 3px;
+    border-radius: 10px;
   }
 
   .controls {
-    pointer-events: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 0.75rem 0.9rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    min-width: 18rem;
-  }
-
-  .settings {
-    pointer-events: auto;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(0, 0, 0, 0.42);
-    color: #fff;
-    width: 2.55rem;
-    height: 2.55rem;
-    border-radius: 16px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-    font-size: 1.25rem;
-    font-weight: 900;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .settings:active {
-    transform: scale(0.98);
+    gap: 0.55rem;
+    margin-top: 0.55rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
   }
 
   .control-row {
@@ -299,7 +261,7 @@
     flex-wrap: wrap;
   }
 
-  button {
+  .controls button {
     border: 1px solid rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.95);
     padding: 0.28rem 0.5rem;
@@ -309,7 +271,7 @@
     color: #2c5f8d;
   }
 
-  button.selected {
+  .controls button.selected {
     border-color: rgba(44, 95, 141, 0.5);
     background: rgba(44, 95, 141, 0.08);
   }
@@ -327,7 +289,8 @@
   
   .label {
     font-size: 0.75rem;
-    color: #888;
+    font-weight: 600;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 0.15rem;
@@ -335,14 +298,31 @@
 
   .value {
     font-size: 1.55rem;
-    font-weight: bold;
+    font-weight: 900;
     color: #2c5f8d;
   }
 
-  .rank-metric {
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    padding-top: 0.45rem;
-    margin-top: 0.25rem;
+  .rank-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 950;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+  }
+
+  .rank-text {
+    white-space: nowrap;
+  }
+
+  .hud.compact .rank-text {
+    display: none;
+  }
+
+  .settings-icon {
+    color: #2c5f8d;
   }
 
   .frost-indicator {
@@ -367,36 +347,6 @@
     100% {
       opacity: 1;
       transform: scale(1.02);
-    }
-  }
-
-  .dash-metric .value {
-    color: #0ea5e9;
-    font-weight: 800;
-  }
-
-  .dash-indicator {
-    display: inline-block;
-    margin-top: 0.25rem;
-    padding: 0.15rem 0.45rem;
-    background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 100%);
-    color: #fff;
-    font-size: 0.62rem;
-    font-weight: 900;
-    letter-spacing: 0.9px;
-    border-radius: 6px;
-    animation: dashPulse 0.4s ease-in-out infinite alternate;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  }
-
-  @keyframes dashPulse {
-    0% {
-      opacity: 0.8;
-      transform: translateY(0) scale(1);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(-1px) scale(1.04);
     }
   }
 
@@ -448,7 +398,6 @@
     }
 
     .controls {
-      min-width: 0;
       width: 100%;
     }
 
