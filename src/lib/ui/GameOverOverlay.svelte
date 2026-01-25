@@ -33,7 +33,9 @@
 {#if gameState.state === 'GAMEOVER'}
   <div class="overlay gameover-overlay">
     <div class="content">
-      <h1>You Got Hit!</h1>
+      <div class="title-block" aria-label="Game over">
+        <h1 class="title">You Got Hit!</h1>
+      </div>
       
       {#if isNewHighScore}
         <p class="new-high-score">🎉 New High Score! 🎉</p>
@@ -63,7 +65,6 @@
       </div>
 
       <div class="final-stats" aria-label="Final statistics">
-        <h2>Final Stats</h2>
         <div class="stats-grid">
           <div class="stat-row seeker"><span class="k">Seekers Dodged</span><span class="v">{gameState.dodgedSeekers}</span></div>
           <div class="stat-row fracturer"><span class="k">Fracturers Avoided</span><span class="v">{gameState.dodgedFracturers}</span></div>
@@ -73,7 +74,18 @@
       </div>
 
       <div class="actions" aria-label="Game over actions">
-        <button type="button" aria-keyshortcuts="Enter Space" onclick={handleRestart}>Play Again</button>
+        <button type="button" class="play-again" aria-keyshortcuts="Enter Space" onclick={handleRestart}>
+          <span class="play-again__label">Play Again</span>
+          <span class="play-again__keys" aria-hidden="true">
+            <span class="keycap keycap--enter" aria-hidden="true">
+              <svg class="key-icon key-icon--enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 6v5a3 3 0 0 1-3 3H5" />
+                <path d="M9 10l-4 4 4 4" />
+              </svg>
+            </span>
+            <span class="keycap keycap--space">SPACE</span>
+          </span>
+        </button>
         <a
           class="coffee"
           href="https://buymeacoffee.com/cellardoortechnologies"
@@ -126,10 +138,42 @@
   }
   
   h1 {
-    font-size: 3rem;
+    margin: 0;
+  }
+
+  .title-block {
+    display: grid;
+    justify-items: center;
+    gap: 0.35rem;
     margin: 0 0 1rem 0;
-    color: #2c5f8d;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .title {
+    font-size: 3.35rem;
+    font-weight: 1000;
+    letter-spacing: 0.02em;
+    line-height: 1.02;
+
+    /* Design-grade title: dark-to-blue gradient text */
+    background: linear-gradient(180deg, #0f172a, #1f4f76 55%, #2c5f8d);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+
+    text-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  }
+
+  .title::after {
+    content: '';
+    display: block;
+    margin: 0.55rem auto 0 auto;
+    width: 9.25rem;
+    height: 7px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(44, 95, 141, 0.15), rgba(44, 95, 141, 0.75), rgba(44, 95, 141, 0.15));
+    box-shadow:
+      0 10px 22px rgba(44, 95, 141, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
   }
   
   .new-high-score {
@@ -173,13 +217,6 @@
     margin: 0 auto 1.5rem auto;
     max-width: 46rem;
     pointer-events: auto;
-  }
-
-  h2 {
-    margin: 0.5rem 0 0.75rem 0;
-    font-size: 1.35rem;
-    color: #2c5f8d;
-    letter-spacing: 0.5px;
   }
 
   .stats-grid {
@@ -279,6 +316,88 @@
     margin-top: 2rem;
   }
 
+  .play-again {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 0.55rem;
+
+    /* Primary action styling (match RankBadge glass/hero vibe) */
+    background: linear-gradient(180deg, rgba(44, 95, 141, 0.98), rgba(30, 74, 109, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+      0 16px 34px rgba(15, 23, 42, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    overflow: hidden;
+  }
+
+  .play-again::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 140% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+    pointer-events: none;
+  }
+
+  .play-again__label {
+    line-height: 1;
+    font-weight: 950;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 12px rgba(15, 23, 42, 0.22);
+  }
+
+  .play-again__keys {
+    display: inline-flex;
+    gap: 0.45rem;
+    align-items: center;
+    opacity: 0.95;
+    line-height: 0;
+  }
+
+  .key-icon {
+    display: block;
+  }
+
+  .keycap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.15rem;
+    padding: 0 0.55rem;
+    border-radius: 8px;
+
+    /* Top-down keycap (no perspective), with subtle bevel */
+    background: linear-gradient(to bottom, #ffffff, #f1f5f9);
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    box-shadow:
+      0 2px 8px rgba(15, 23, 42, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    font-size: 0.66rem;
+    line-height: 1;
+  }
+
+  .keycap--space {
+    min-width: 3.9rem;
+  }
+
+  .keycap--enter {
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border-radius: 999px;
+  }
+
+  .key-icon--enter {
+    width: 0.95rem;
+    height: 0.95rem;
+    color: #0f172a;
+  }
+
   button {
     padding: 1rem 2rem;
     font-size: 1.5rem;
@@ -297,6 +416,20 @@
   
   button:active {
     transform: scale(0.95);
+  }
+
+  .play-again:hover {
+    background: linear-gradient(180deg, rgba(56, 115, 168, 0.98), rgba(33, 85, 125, 0.98));
+    transform: translateY(-1px) scale(1.03);
+  }
+
+  .play-again:active {
+    transform: translateY(0) scale(0.985);
+  }
+
+  .play-again:focus-visible {
+    outline: 3px solid rgba(44, 95, 141, 0.55);
+    outline-offset: 4px;
   }
 
   .coffee {
@@ -342,8 +475,13 @@
       padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
     }
 
-    h1 {
-      font-size: 2.2rem;
+    .title {
+      font-size: 2.35rem;
+    }
+
+    .title::after {
+      width: 7.5rem;
+      height: 6px;
     }
 
     .score-display {
@@ -372,6 +510,10 @@
       width: min(22rem, 100%);
       font-size: 1.25rem;
       padding: 0.9rem 1.25rem;
+    }
+
+    .play-again__keys {
+      display: none;
     }
   }
 </style>
