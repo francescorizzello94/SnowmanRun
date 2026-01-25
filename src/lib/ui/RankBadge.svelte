@@ -28,7 +28,6 @@
   </div>
 
   <div class="rank-hero__name">{cfg.title}</div>
-  <div class="rank-hero__sub">Press Enter / Space to play again</div>
 </div>
 
 <style>
@@ -165,14 +164,6 @@
     background: var(--hero-gradient);
     opacity: 0.9;
     filter: saturate(1.1);
-  }
-
-  .rank-hero__sub {
-    position: relative;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #334155;
-    opacity: 0.9;
   }
 
   /* Newcomer: explicitly dark slate label/name */
