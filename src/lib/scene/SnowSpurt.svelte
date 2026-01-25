@@ -85,7 +85,7 @@
     // Spawn just behind the player (toward camera) so it reads as a "trail".
     positions[base + 0] = gameState.playerX + rand(-0.25, 0.25);
     positions[base + 1] = GROUND_Y + rand(0.02, 0.09);
-    positions[base + 2] = rand(0.35, 0.75);
+    positions[base + 2] = gameState.playerZ + rand(0.35, 0.75);
 
     // Two "feels": fluffy powder (hangs) + slushy clumps (heavier, fall faster)
     const isPowder = Math.random() < 0.72;

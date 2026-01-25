@@ -21,6 +21,25 @@ export type GameState = 'LOADING' | 'START' | 'PLAYING' | 'GAMEOVER' | 'ERROR';
 export type SnowballProfile = 'STANDARD' | 'SEEKER' | 'FRACTURER' | 'VORTEX' | 'HEAVY' | 'FRAGMENT';
 
 /**
+ * Rank-Based Progression System
+ *
+ * Players earn ranks based on survival time. Each rank-up:
+ * - Shows a visual prestige indicator in the HUD
+ *
+ * Note: Rank-ups do not grant invulnerability; dash/jump handle survivability.
+ */
+export const RANKS = [
+	{ name: 'NEWCOMER', threshold: 0, color: '#888888' },
+	{ name: 'SURVIVOR', threshold: 15, color: '#4a9eff' },
+	{ name: 'FROST WALKER', threshold: 30, color: '#31d3ff' },
+	{ name: 'BLIZZARD RUNNER', threshold: 60, color: '#b07cff' },
+	{ name: 'AVALANCHE MASTER', threshold: 90, color: '#ffd34d' },
+	{ name: 'WINTER LEGEND', threshold: 120, color: '#ff6a3d' }
+] as const;
+
+export type RankName = (typeof RANKS)[number]['name'];
+
+/**
  * Snowball Data Structure
  *
  * Specification Compliance:
@@ -104,11 +123,27 @@ export class GameStateManager {
 	dodgedVortex = $state(0);
 	dodgedHeavies = $state(0);
 
+	// Rank-Based Progression (reactive, UI-affecting)
+	currentRankIndex = $state(0);
+
 	// NON-REACTIVE ENGINE STATE (Raw variables - high-frequency updates)
 	// CRITICAL: These are updated every frame (60+ times/sec) and MUST remain non-reactive
 	// to minimize main-thread jank. Svelte's $state overhead would cause dropped frames.
 	playerX: number = 0; // Updated every frame via physics loop
 	playerVelocityX: number = 0; // Updated every frame via acceleration
+	playerZ: number = 0; // Forward offset for dash (updated in authoritative loop)
+
+	// Forward dash tuning (non-reactive constants)
+	private readonly BASE_FORWARD_SPEED = 10; // meters per second (distance tracker)
+	private readonly DASH_DISTANCE_STEP = 150; // meters between auto-dashes
+	private readonly DASH_DURATION = 2.7; // seconds
+	private readonly DASH_SPEED_MULT = 2.0; // multiplier applied to forward speed
+	private readonly DASH_Z_OFFSET = -1.6; // forward shove along -Z (visual + collision)
+
+	// Dash state (non-reactive)
+	dashStartTime: number = -1e9;
+	dashEndTime: number = -1e9;
+	lastDashDistance: number = 0;
 
 	// INPUT INTENT (non-reactive)
 	// Keyboard + touch should both write to these fields.
@@ -167,6 +202,11 @@ export class GameStateManager {
 	jumpInvulnEndTime: number = -1e9;
 	jumpCooldownEndTime: number = 0;
 
+	// Frost Phase state (non-reactive, high-frequency)
+	// Automatic invulnerability triggered by rank progression
+	frostPhaseStartTime: number = -1e9;
+	frostPhaseEndTime: number = -1e9;
+
 	// Milestone tracking (non-reactive, driven by the single per-frame loop)
 	lastDistanceMilestone: number = 0;
 	lastTimeMilestoneIndex: number = 0;
@@ -224,6 +264,7 @@ export class GameStateManager {
 		// Reset engine state
 		this.playerX = 0;
 		this.playerVelocityX = 0;
+		this.playerZ = 0;
 		this.digitalLeftHeld = false;
 		this.digitalRightHeld = false;
 		this.analogActive = false;
@@ -248,6 +289,15 @@ export class GameStateManager {
 		this.jumpInvulnEndTime = -1e9;
 		this.jumpCooldownEndTime = 0;
 
+		// Reset dash state
+		this.dashStartTime = -1e9;
+		this.dashEndTime = -1e9;
+		this.lastDashDistance = 0;
+
+		// Reset Frost Phase state
+		this.frostPhaseStartTime = -1e9;
+		this.frostPhaseEndTime = -1e9;
+
 		// Reset reactive UI state
 		this.milestoneText = null;
 		this.milestoneExpiresAt = 0;
@@ -255,6 +305,7 @@ export class GameStateManager {
 		this.dodgedFracturers = 0;
 		this.dodgedVortex = 0;
 		this.dodgedHeavies = 0;
+		this.currentRankIndex = 0;
 	}
 
 	registerTerrainResetHook(fn: () => void) {
@@ -333,6 +384,111 @@ export class GameStateManager {
 		this.jumpInvulnEndTime = Math.min(this.jumpInvulnEndTime, now);
 	}
 
+	/**
+	 * Forward Dash System (automatic, distance-based)
+	 * Trigger: every DASH_DISTANCE_STEP meters
+	 * Effect: temporary forward speed boost + forward shove on Z
+	 */
+	private startDash(now: number): void {
+		if (this.isDashActive(now)) return;
+		this.dashStartTime = now;
+		this.dashEndTime = now + this.DASH_DURATION;
+		this.queueMilestone('DASH!', 0.65);
+	}
+
+	checkDashTrigger(distance: number, now: number = this.timePlayed): void {
+		const step = this.DASH_DISTANCE_STEP;
+		const next = Math.floor(distance / step) * step;
+		if (next >= step && next > this.lastDashDistance) {
+			this.lastDashDistance = next;
+			this.startDash(now);
+		}
+	}
+
+	isDashActive(now: number = this.timePlayed): boolean {
+		return now >= this.dashStartTime && now < this.dashEndTime;
+	}
+
+	getDashProgress(now: number = this.timePlayed): number {
+		if (!this.isDashActive(now)) return 0;
+		const duration = this.dashEndTime - this.dashStartTime;
+		const elapsed = now - this.dashStartTime;
+		return Math.max(0, Math.min(1, elapsed / Math.max(0.001, duration)));
+	}
+
+	getDashIntensity(now: number = this.timePlayed): number {
+		const p = this.getDashProgress(now);
+		return Math.sin(Math.PI * p);
+	}
+
+	getDashSpeedMultiplier(now: number = this.timePlayed): number {
+		const intensity = this.getDashIntensity(now);
+		return 1 + (this.DASH_SPEED_MULT - 1) * intensity;
+	}
+
+	getForwardSpeed(now: number = this.timePlayed): number {
+		return this.BASE_FORWARD_SPEED * this.getDashSpeedMultiplier(now);
+	}
+
+	getDashZOffset(now: number = this.timePlayed): number {
+		return this.DASH_Z_OFFSET * this.getDashIntensity(now);
+	}
+
+	updateDashState(now: number = this.timePlayed, distance: number = this.distanceTraveled): void {
+		this.checkDashTrigger(distance, now);
+		this.playerZ = this.getDashZOffset(now);
+	}
+
+	/**
+	 * Frost Phase - Automatic Invulnerability System
+	 *
+	 * Triggered AUTOMATICALLY upon rank-up, providing brief protection
+	 * against ALL snowballs (including Heavies, unlike jump).
+	 * The player has no control over activation - it's a reward for survival.
+	 *
+	 * Duration: 2.5s invulnerability
+	 * Visual: Ice crystallization effect on player model
+	 */
+
+	isFrostPhaseActive(now: number = this.timePlayed): boolean {
+		return now >= this.frostPhaseStartTime && now < this.frostPhaseEndTime;
+	}
+
+	getFrostPhaseProgress(now: number = this.timePlayed): number {
+		if (!this.isFrostPhaseActive(now)) return 0;
+		const duration = this.frostPhaseEndTime - this.frostPhaseStartTime;
+		const elapsed = now - this.frostPhaseStartTime;
+		return Math.max(0, Math.min(1, elapsed / duration));
+	}
+
+	/**
+	 * Rank Progression Check
+	 * Called from the game loop to check for rank-ups.
+	 */
+	checkRankProgression(now: number = this.timePlayed) {
+		const timeSurvived = now;
+
+		// Find the highest rank achieved
+		let newRankIndex = 0;
+		for (let i = RANKS.length - 1; i >= 0; i--) {
+			if (timeSurvived >= RANKS[i].threshold) {
+				newRankIndex = i;
+				break;
+			}
+		}
+
+		// Rank up: show milestone
+		if (newRankIndex > this.currentRankIndex) {
+			const newRank = RANKS[newRankIndex];
+			this.currentRankIndex = newRankIndex;
+			this.queueMilestone(`RANK UP: ${newRank.name}`, 1.2);
+		}
+	}
+
+	getCurrentRank(): (typeof RANKS)[number] {
+		return RANKS[this.currentRankIndex];
+	}
+
 	setDifficultyPreset(preset: DifficultyPreset) {
 		this.difficultyPreset = preset;
 	}
@@ -343,6 +499,7 @@ export class GameStateManager {
 
 	endGame() {
 		this.state = 'GAMEOVER';
+		this.playerZ = 0;
 
 		// Persist best score (environment-gated)
 		if (this.distanceTraveled > this.bestScore) {

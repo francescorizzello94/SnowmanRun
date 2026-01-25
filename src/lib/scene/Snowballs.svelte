@@ -34,7 +34,7 @@
   // === PROFILE BADGES (UI cues) ===
   // Goal: keep STANDARD snowballs plain; add lightweight, readable markers for elite profiles.
   // Implemented as camera-facing sprites (billboarded) with tiny glyphs.
-  let badgesReady = false;
+  let badgesReady = $state(false);
   const badgeTextures: THREE.Texture[] = [];
   const badgeMaterials: Partial<Record<string, THREE.SpriteMaterial>> = {};
 
@@ -319,6 +319,12 @@
   
   let hitStopTimer = 0;
   let groundMesh: THREE.Mesh | null = null;
+
+  // Render invalidation tick (keeps non-reactive snowball array in sync with template)
+  let renderTick = $state(0);
+  let renderAcc = 0;
+  const RENDER_HZ = 30;
+  let snowballsView = $state<typeof gameState.snowballs>([]);
   
   function findGroundMesh() {
     if (groundMesh) return;
@@ -374,9 +380,21 @@
       return;
     }
     
-    // Update time and distance
+    // Update time and distance (dash can temporarily increase forward speed)
     gameState.timePlayed += delta;
-    gameState.distanceTraveled += delta * 10;
+    const forwardSpeed = gameState.getForwardSpeed(gameState.timePlayed);
+    gameState.distanceTraveled += delta * forwardSpeed;
+
+    // Trigger periodic template updates for snowball list + positions
+    renderAcc += delta;
+    if (renderAcc >= 1 / RENDER_HZ) {
+      renderAcc = 0;
+      renderTick = (renderTick + 1) % 1000000;
+      snowballsView = gameState.snowballs.slice();
+    }
+
+    // Update dash state (auto-triggered by distance milestones)
+    gameState.updateDashState(gameState.timePlayed, gameState.distanceTraveled);
 
     // Milestone triggers (non-blocking)
     // Distance: every 100m
@@ -386,14 +404,8 @@
       gameState.queueMilestone(`${distMilestone}M REACHED!`);
     }
 
-    // Time: every 30s -> rank up
-    const RANKS = ['SURVIVOR', 'BLIZZARD WALKER', 'AVALANCHE MASTER'] as const;
-    const timeIndex = Math.floor(gameState.timePlayed / 30);
-    if (timeIndex >= 1 && timeIndex > gameState.lastTimeMilestoneIndex) {
-      gameState.lastTimeMilestoneIndex = timeIndex;
-      const rank = RANKS[Math.min(timeIndex - 1, RANKS.length - 1)];
-      gameState.queueMilestone(`RANK UP: ${rank}`);
-    }
+    // Rank-Based Progression: check for rank-ups and award Frost Phase charges
+    gameState.checkRankProgression();
 
     // Advance queued milestone messages
     gameState.tickMilestones();
@@ -406,13 +418,16 @@
     
     // Get current player position for collision (captured once per frame)
     const playerX = gameState.playerX;
-    const playerZ = 0;
+    const playerZ = gameState.playerZ;
     
-    const speed = difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset);
+    const dashSpeedMul = gameState.getDashSpeedMultiplier(gameState.timePlayed);
+    const speed =
+      difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset) * dashSpeedMul;
     const snowballs = gameState.snowballs;
 
     // Seeker predictive intercept tuning
     const SEEKER_LOCK_Z = -15; // lock when within 15 units of player on Z
+    const seekerLockZ = playerZ + SEEKER_LOCK_Z;
     const SEEKER_LEAD_MIN = 0.35;
     const SEEKER_LEAD_MAX = 0.95;
     const SEEKER_TURN_RATE = 3.6; // per-second responsiveness
@@ -455,13 +470,13 @@
          * Visual Tell: Red emissive material + yaw jitter applied below
          */
         const locked = snowball.seekerLocked === true;
-        if (!locked && snowball.z >= SEEKER_LOCK_Z) {
+        if (!locked && snowball.z >= seekerLockZ) {
           snowball.seekerLocked = true; // Commit to current heading
         }
 
         if (snowball.seekerLocked !== true) {
           // Calculate intercept point with velocity lead
-          const toPlayer = Math.max(0.001, 0 - snowball.z);
+          const toPlayer = Math.max(0.001, playerZ - snowball.z);
           const tToPlayer = toPlayer / Math.max(0.001, snowballSpeed);
           const leadT = Math.max(SEEKER_LEAD_MIN, Math.min(SEEKER_LEAD_MAX, tToPlayer));
           const predictedX = Math.max(-7, Math.min(7, playerX + gameState.playerVelocityX * leadT));
@@ -541,7 +556,7 @@
       
       // 2. IMMEDIATE CLEANUP - Remove if past player (prevents ghost collisions)
       // This happens BEFORE collision check for balls that have passed
-      if (snowball.z > CLEANUP_Z) {
+      if (snowball.z > playerZ + CLEANUP_Z) {
   		if (snowball.profile === 'FRAGMENT' && snowball.parentFracturerId !== undefined) {
   			gameState.recordFracturerFragmentPassed(snowball.parentFracturerId);
   		} else {
@@ -552,9 +567,22 @@
       }
       
       // 3. SYNCHRONOUS COLLISION CHECK - Only for snowballs in front of or at player
-      // Check collision only when snowball is in the danger zone
-      if (snowball.z >= -1.5 && snowball.z <= CLEANUP_Z) {
+      // Check collision only when snowball is in the danger zone (relative to player Z)
+      if (snowball.z >= playerZ - 1.5 && snowball.z <= playerZ + CLEANUP_Z) {
         const now = gameState.timePlayed;
+
+        // Dash: Complete invulnerability - snowman charges through obstacles
+        // The whole point of dash is to phase through snowballs
+        if (gameState.isDashActive(now)) {
+          continue;
+        }
+
+        // Frost Phase: Complete invulnerability against ALL snowballs (including Heavies)
+        // This is the reward for rank progression - stronger than jump
+        if (gameState.isFrostPhaseActive(now)) {
+          continue;
+        }
+
         const jumpingNow = now >= gameState.jumpInvulnStartTime && now < gameState.jumpInvulnEndTime;
         // Jump disables collision for standard-sized snowballs, but NOT for "Heavies".
         // Collision is X/Z only, so the jump must be handled as a gameplay gate here.
@@ -591,7 +619,10 @@
 </script>
 
 <!-- Snowball visuals -->
-{#each gameState.snowballs as snowball (snowball.id)}
+{#if renderTick >= 0}
+  {@const _renderTick = renderTick}
+{/if}
+{#each snowballsView as snowball (snowball.id)}
   {#if snowball.active}
     {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
     <!-- Organic wobble: pivot offset via Group+Mesh offset -->

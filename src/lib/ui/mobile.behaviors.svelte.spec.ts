@@ -29,6 +29,19 @@ describe('mobile UI behaviors', () => {
 		const transform = getComputedStyle(hudEl).transform;
 
 		expect(transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)').toBe(true);
+
+		const statEl = document.querySelector('.hud .stat') as HTMLElement | null;
+		if (!statEl) throw new Error('Expected HUD stat card');
+
+		const rankIconEl = document.querySelector('.hud .rank-icon') as HTMLElement | null;
+		if (!rankIconEl) throw new Error('Expected HUD rank icon');
+
+		const statRect = statEl.getBoundingClientRect();
+		const rankRect = rankIconEl.getBoundingClientRect();
+
+		// Rank label/value must stay inside the card on mobile.
+		expect(rankRect.left).toBeGreaterThanOrEqual(statRect.left - 0.5);
+		expect(rankRect.right).toBeLessThanOrEqual(statRect.right + 0.5);
 	});
 
 	it('Game over screen is scrollable on small screens', async () => {
