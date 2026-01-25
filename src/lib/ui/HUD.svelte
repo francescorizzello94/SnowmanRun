@@ -2,12 +2,14 @@
   import { onMount } from 'svelte';
   import { getGameState, RANKS } from '$lib/game';
   import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
+  import { getRankUi, RANK_ICON_PATHS } from '$lib/ui/rank-ui';
 
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
 
   // Derive current rank for display
   let currentRank = $derived(RANKS[gameState.currentRankIndex]);
+  let currentRankUi = $derived(getRankUi(currentRank.name));
   let frostPhaseActive = $derived(gameState.isFrostPhaseActive(gameState.timePlayed));
   let dashActive = $derived(gameState.isDashActive(gameState.timePlayed));
   let forwardSpeed = $derived(gameState.getForwardSpeed(gameState.timePlayed));
@@ -75,8 +77,24 @@
       </div>
       <div class="metric rank-metric">
         <span class="label">Rank</span>
-        <span class="value rank-value" style="color: {currentRank.color}">
-          {currentRank.name}
+        <span
+          class="value rank-icon"
+          aria-label={currentRank.name}
+          title={currentRank.name}
+          style="color: {currentRank.color}"
+        >
+          <svg
+            class="rank-icon__svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d={RANK_ICON_PATHS[currentRankUi.icon]} />
+          </svg>
         </span>
         {#if frostPhaseActive}
           <span class="frost-indicator">FROST PHASE</span>
@@ -180,11 +198,13 @@
     padding: 0.35rem 0.65rem;
     border-radius: 12px;
     width: 100%;
+    overflow: hidden;
   }
 
   .stat-compact .metric {
     flex: 1 1 0;
     align-items: flex-start;
+    min-width: 0;
   }
 
   .stat-compact .metric:last-child:not(.rank-metric) {
@@ -192,7 +212,8 @@
   }
 
   .stat-compact .rank-metric {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
     border-top: none;
     border-left: 1px solid rgba(0, 0, 0, 0.08);
     padding-top: 0;
@@ -201,8 +222,22 @@
     margin-left: 0.45rem;
   }
 
-  .stat-compact .rank-value {
-    font-size: 0.75rem;
+  .rank-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  .rank-icon__svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .stat-compact .rank-icon {
+    width: 1.25rem;
+    height: 1.25rem;
   }
 
   .stat-compact .frost-indicator {
@@ -308,12 +343,6 @@
     border-top: 1px solid rgba(0, 0, 0, 0.08);
     padding-top: 0.45rem;
     margin-top: 0.25rem;
-  }
-
-  .rank-value {
-    font-size: 0.95rem;
-    font-weight: 800;
-    letter-spacing: 0.5px;
   }
 
   .frost-indicator {

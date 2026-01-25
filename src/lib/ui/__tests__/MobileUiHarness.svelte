@@ -14,6 +14,8 @@
 			gameState.state = 'PLAYING';
 			gameState.distanceTraveled = 123.4;
 			gameState.timePlayed = 56.7;
+			// Force a long rank name to verify it stays within the HUD card on mobile.
+			gameState.currentRankIndex = 4;
 			gameState.difficultyPreset = 'NORMAL';
 			gameState.snowfallEnabled = true;
 		}
