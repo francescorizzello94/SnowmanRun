@@ -40,23 +40,26 @@
       {/if}
       
       <div class="score-display">
-        <div class="score-item">
-          <span class="label">Your Score</span>
-          <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
-        </div>
-        <div class="score-item">
-          <span class="label">Time Survived</span>
-          <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
-        </div>
-        <div class="score-item rank-item hero" aria-label="Final rank">
+        <div class="rank-hero-wrap" aria-label="Final rank">
           <RankBadge rankName={finalRank.name} />
         </div>
-        {#if !isNewHighScore && gameState.bestScore > 0}
-          <div class="score-item">
-            <span class="label">Best Score</span>
-            <span class="value">{gameState.bestScore.toFixed(1)}</span>
+
+        <div class="score-cards" aria-label="Score summary">
+          <div class="score-card">
+            <span class="label">Your Score</span>
+            <span class="value">{gameState.distanceTraveled.toFixed(1)}</span>
           </div>
-        {/if}
+          <div class="score-card">
+            <span class="label">Time Survived</span>
+            <span class="value">{gameState.timePlayed.toFixed(1)}s</span>
+          </div>
+          {#if !isNewHighScore && gameState.bestScore > 0}
+            <div class="score-card">
+              <span class="label">Best Score</span>
+              <span class="value">{gameState.bestScore.toFixed(1)}</span>
+            </div>
+          {/if}
+        </div>
       </div>
 
       <div class="final-stats" aria-label="Final statistics">
@@ -93,14 +96,6 @@
     max-width: 100vw;
     display: flex;
     align-items: center;
-
-  /* Hero rank card: let the RankBadge own the visuals */
-  .score-item.rank-item.hero {
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-    border-radius: 18px;
-  }
     justify-content: center;
     pointer-events: none;
     z-index: 100;
@@ -127,6 +122,7 @@
     pointer-events: auto;
 		touch-action: pan-y;
 		box-sizing: border-box;
+    width: min(66rem, calc(100% - 2rem));
   }
   
   h1 {
@@ -154,10 +150,23 @@
   }
   
   .score-display {
-    display: flex;
-    gap: 2rem;
-    justify-content: center;
+    display: grid;
+    justify-items: center;
+    gap: 1.25rem;
     margin: 2rem 0;
+  }
+
+  .rank-hero-wrap {
+    width: min(28rem, 100%);
+  }
+
+  .score-cards {
+    width: 100%;
+    max-width: 46rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.9rem;
+    align-items: stretch;
   }
 
   .final-stats {
@@ -230,13 +239,22 @@
     font-size: 1.2rem;
   }
   
-  .score-item {
+  .score-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(44, 95, 141, 0.1);
-    padding: 1.5rem 2rem;
-    border-radius: 12px;
+
+    padding: 1.15rem 1.25rem;
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow:
+      0 10px 26px rgba(15, 23, 42, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 0 0 1px rgba(15, 23, 42, 0.04);
   }
   
   .label {
@@ -329,9 +347,13 @@
     }
 
     .score-display {
-      flex-direction: column;
       gap: 0.75rem;
       margin: 1.25rem 0;
+    }
+
+    .score-cards {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }
 
     .value {
