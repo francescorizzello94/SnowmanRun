@@ -18,12 +18,14 @@ let html = fs.readFileSync(indexHtmlPath, 'utf8');
 // Ensure the SvelteKit client entrypoints are relative so the game works under itch.io subpaths.
 // Even with kit.paths.relative = true, adapter-static's SPA fallback page currently emits
 // root-absolute /_app URLs in build/index.html (modulepreloads + dynamic imports).
-// Keep this script small and easy to delete if/when SvelteKit fixes fallback HTML generation.
+//
+// This is a targeted post-build workaround and intentionally regex-based (no HTML parser).
+// It may need adjustment if SvelteKit changes the fallback output format.
 html = html
 	// href="/_app/..." or src='/_app/...'
 	.replace(/(["'])\/_app\//g, '$1./_app/')
 	// import("/_app/...")
-	.replace(/import\((\s*["'])\/_app\//g, 'import($1./_app/');
+	.replace(/import\s*\((\s*["'])\/_app\//g, 'import($1./_app/');
 
 fs.writeFileSync(indexHtmlPath, html);
 
