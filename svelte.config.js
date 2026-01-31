@@ -25,7 +25,9 @@ const config = {
 					fallback: 'index.html',
 					pages: 'build',
 					assets: 'build',
-					strict: false
+					// Keep strict mode on so we don't silently ship an itch build with missing prerendering.
+					// This should be safe because the app is prerendered (see src/routes/+layout.ts).
+					strict: true
 				})
 			: netlify()
 	}
