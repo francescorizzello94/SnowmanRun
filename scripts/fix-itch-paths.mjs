@@ -25,7 +25,7 @@ html = html
 	// href="/_app/..." or src='/_app/...'
 	.replace(/(["'])\/_app\//g, '$1./_app/')
 	// import("/_app/...")
-	.replace(/import\s*\((\s*["'])\/_app\//g, 'import($1./_app/');
+	.replace(/import(\s*)\((\s*["'])\/_app\//g, 'import$1($2./_app/');
 
 fs.writeFileSync(indexHtmlPath, html);
 
