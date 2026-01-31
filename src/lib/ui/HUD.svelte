@@ -3,6 +3,7 @@
   import { getGameState, RANKS } from '$lib/game';
   import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
   import { getRankUi, RANK_ICON_PATHS } from '$lib/ui/rank-ui';
+  import { onDestroy } from 'svelte';
 
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
@@ -16,15 +17,65 @@
 
   let isCompact = $state(false);
   let controlsOpen = $state(false);
+  let controlsDimmed = $state(false);
+  let isTouchLike = $state(false);
+
+  const CONTROLS_IDLE_MS = 5000;
+  const CONTROLS_FADE_MS = 900;
+  let controlsIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  let controlsCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearControlsIdleTimer() {
+    if (controlsIdleTimer) {
+      clearTimeout(controlsIdleTimer);
+      controlsIdleTimer = null;
+    }
+  }
+
+  function clearControlsCollapseTimer() {
+    if (controlsCollapseTimer) {
+      clearTimeout(controlsCollapseTimer);
+      controlsCollapseTimer = null;
+    }
+  }
+
+  function scheduleControlsDim() {
+    clearControlsIdleTimer();
+    clearControlsCollapseTimer();
+    controlsIdleTimer = setTimeout(() => {
+      controlsDimmed = true;
+
+      // After the fade completes, auto-collapse the menu.
+      // Any interaction (hover/touch/pointer) calls bumpControlsActivity(), which cancels this.
+      clearControlsCollapseTimer();
+      controlsCollapseTimer = setTimeout(() => {
+        if (controlsOpen && controlsDimmed) controlsOpen = false;
+      }, CONTROLS_FADE_MS);
+    }, CONTROLS_IDLE_MS);
+  }
+
+  function bumpControlsActivity() {
+    if (!controlsOpen) return;
+    clearControlsCollapseTimer();
+    controlsDimmed = false;
+    scheduleControlsDim();
+  }
+
+  function releaseUiFocus() {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  }
 
   function updateCompact() {
     if (typeof window === 'undefined') return;
     // Some mobile devices report unexpectedly large CSS widths; prefer input capability
     // and height constraints over width-only checks.
-    const isTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+    const nextTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
     const isNarrow = window.matchMedia('(max-width: 520px)').matches;
     const isShort = window.matchMedia('(max-height: 520px)').matches;
-    const nextCompact = isTouchLike || isNarrow || isShort;
+    isTouchLike = nextTouchLike;
+    const nextCompact = nextTouchLike || isNarrow || isShort;
     isCompact = nextCompact;
 
     // Always keep settings collapsed on compact/mobile.
@@ -39,6 +90,24 @@
       window.removeEventListener('resize', updateCompact);
       window.removeEventListener('orientationchange', updateCompact);
     };
+  });
+
+  $effect(() => {
+    // When the controls open, start the inactivity timer.
+    // When they close, reset all dimming state.
+    if (controlsOpen) {
+      controlsDimmed = false;
+      scheduleControlsDim();
+    } else {
+      controlsDimmed = false;
+      clearControlsIdleTimer();
+      clearControlsCollapseTimer();
+    }
+  });
+
+  onDestroy(() => {
+    clearControlsIdleTimer();
+    clearControlsCollapseTimer();
   });
 
   function setPreset(preset: DifficultyPreset) {
@@ -106,7 +175,20 @@
       </div>
 
       {#if controlsOpen}
-        <div class="controls" aria-label="Difficulty and snow controls">
+        <div
+          class="controls"
+          class:dimmed={controlsDimmed}
+          aria-label="Difficulty and snow controls"
+          aria-hidden={controlsDimmed}
+          onpointerdown={bumpControlsActivity}
+          onpointerenter={() => {
+            // Hover-based restore on desktop; on touch, pointerenter may never fire.
+            if (!isTouchLike) bumpControlsActivity();
+          }}
+          onpointermove={() => {
+            if (!isTouchLike) bumpControlsActivity();
+          }}
+        >
           <div class="control-row">
             <span class="label">Difficulty</span>
             <div class="buttons" role="group" aria-label="Difficulty presets">
@@ -114,7 +196,11 @@
                 <button
                   type="button"
                   class:selected={gameState.difficultyPreset === preset}
-                  onclick={() => setPreset(preset)}
+                  onclick={() => {
+                    bumpControlsActivity();
+                    setPreset(preset);
+                    releaseUiFocus();
+                  }}
                 >
                   {preset}
                 </button>
@@ -123,7 +209,14 @@
           </div>
 
           <label class="toggle">
-            <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
+            <input
+              type="checkbox"
+              bind:checked={gameState.snowfallEnabled}
+              onchange={() => {
+                bumpControlsActivity();
+                releaseUiFocus();
+              }}
+            />
             <span class="label">Snowfall</span>
           </label>
           <div class="hint">Hotkeys: 1–4</div>
@@ -247,6 +340,14 @@
     margin-top: 0.55rem;
     padding-top: 0.55rem;
     border-top: 1px solid rgba(0, 0, 0, 0.08);
+    transition:
+      opacity 900ms ease,
+      filter 900ms ease;
+  }
+
+  .controls.dimmed {
+    opacity: 0.12;
+    filter: grayscale(1) saturate(0.2);
   }
 
   .control-row {
