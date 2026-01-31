@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { T, useTask } from '@threlte/core';
   import { useGltf } from '@threlte/extras';
+  import { asset } from '$app/paths';
   import { getGameState } from '$lib/game';
   import * as THREE from 'three';
 
@@ -244,7 +245,9 @@
   const frostShieldGeometry = new THREE.SphereGeometry(1.8, 24, 24);
 
   // Load snowman GLTF with explicit lifecycle management
-  const gltfPromise = useGltf('/snowman_scene.gltf')
+  const snowmanGltfUrl = asset('/snowman_scene.gltf');
+
+  const gltfPromise = useGltf(snowmanGltfUrl)
     .then((gltf) => {
       tuneGltfMaterials(gltf.scene);
       placeModelOnGround(gltf.scene);
