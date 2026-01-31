@@ -1,12 +1,15 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
   import { T } from '@threlte/core';
+  import { getGameState } from '$lib/game';
   import Camera from './Camera.svelte';
   import Environment from './Environment.svelte';
   import Player from './Player.svelte';
   import Snowballs from './Snowballs.svelte';
   import Snowfall from './Snowfall.svelte';
   import SnowSpurt from './SnowSpurt.svelte';
+
+  const gameState = getGameState();
 </script>
 
 <div class="scene-container">
@@ -24,7 +27,9 @@
     <Environment />
 
     <!-- Snowfall (toggleable) -->
-    <Snowfall />
+    {#if gameState.snowfallEnabled}
+      <Snowfall />
+    {/if}
     
     <!-- Game objects -->
     <Player />
