@@ -11,32 +11,41 @@ if (!fs.existsSync(buildDir)) {
 	process.exit(1);
 }
 
-const output = fs.createWriteStream(outPath);
-const archive = archiver('zip', { zlib: { level: 9 } });
+function exitWithZipError(message, err) {
+	console.error(`ITCH ZIP FAIL: ${message}`);
+	if (err) console.error(err);
+	process.exit(1);
+}
 
-archive.on('warning', (err) => {
-	if (err.code === 'ENOENT') {
-		console.warn(err.message);
-		return;
-	}
-	throw err;
-});
+try {
+	const output = fs.createWriteStream(outPath);
+	const archive = archiver('zip', { zlib: { level: 9 } });
 
-archive.on('error', (err) => {
-	throw err;
-});
+	const done = new Promise((resolve, reject) => {
+		output.once('close', resolve);
+		output.once('error', (err) => reject(new Error(`Failed writing ${outPath}`, { cause: err })));
+		archive.once('error', (err) =>
+			reject(new Error('archiver error while creating zip', { cause: err }))
+		);
+	});
 
-const done = new Promise((resolve, reject) => {
-	output.on('close', resolve);
-	output.on('error', reject);
-	archive.on('error', reject);
-});
+	archive.on('warning', (err) => {
+		if (err?.code === 'ENOENT') {
+			console.warn(`ITCH ZIP WARN: ${err.message}`);
+			return;
+		}
+		// Treat unexpected warnings as failures so CI/packaging doesn't silently produce a bad zip.
+		archive.emit('error', err);
+	});
 
-archive.pipe(output);
+	archive.pipe(output);
 
-// Put the *contents* of /build at the zip root (itch requires index.html at zip root).
-archive.directory(buildDir + path.sep, false);
-await archive.finalize();
-await done;
+	// Put the *contents* of /build at the zip root (itch requires index.html at zip root).
+	archive.directory(buildDir + path.sep, false);
+	await archive.finalize();
+	await done;
 
-console.log(`Wrote ${outPath} (${archive.pointer()} bytes)`);
+	console.log(`Wrote ${outPath} (${archive.pointer()} bytes)`);
+} catch (err) {
+	exitWithZipError('Zip creation failed.', err);
+}
