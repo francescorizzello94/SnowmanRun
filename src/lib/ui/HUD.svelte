@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getGameState, RANKS } from '$lib/game';
-  import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
   import { getRankUi, RANK_ICON_PATHS } from '$lib/ui/rank-ui';
-  import { onDestroy } from 'svelte';
 
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
@@ -13,73 +11,17 @@
   let currentRankUi = $derived(getRankUi(currentRank.name));
   let frostPhaseActive = $derived(gameState.isFrostPhaseActive(gameState.timePlayed));
 
-  const presets: DifficultyPreset[] = ['EASY', 'NORMAL', 'HARD', 'INSANE'];
-
   let isCompact = $state(false);
-  let controlsOpen = $state(false);
-  let controlsDimmed = $state(false);
-  let isTouchLike = $state(false);
-
-  const CONTROLS_IDLE_MS = 5000;
-  const CONTROLS_FADE_MS = 900;
-  let controlsIdleTimer: ReturnType<typeof setTimeout> | null = null;
-  let controlsCollapseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function clearControlsIdleTimer() {
-    if (controlsIdleTimer) {
-      clearTimeout(controlsIdleTimer);
-      controlsIdleTimer = null;
-    }
-  }
-
-  function clearControlsCollapseTimer() {
-    if (controlsCollapseTimer) {
-      clearTimeout(controlsCollapseTimer);
-      controlsCollapseTimer = null;
-    }
-  }
-
-  function scheduleControlsDim() {
-    clearControlsIdleTimer();
-    clearControlsCollapseTimer();
-    controlsIdleTimer = setTimeout(() => {
-      controlsDimmed = true;
-
-      // After the fade completes, auto-collapse the menu.
-      // Any interaction (hover/touch/pointer) calls bumpControlsActivity(), which cancels this.
-      clearControlsCollapseTimer();
-      controlsCollapseTimer = setTimeout(() => {
-        if (controlsOpen && controlsDimmed) controlsOpen = false;
-      }, CONTROLS_FADE_MS);
-    }, CONTROLS_IDLE_MS);
-  }
-
-  function bumpControlsActivity() {
-    if (!controlsOpen) return;
-    clearControlsCollapseTimer();
-    controlsDimmed = false;
-    scheduleControlsDim();
-  }
-
-  function releaseUiFocus() {
-    if (typeof document === 'undefined') return;
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) active.blur();
-  }
 
   function updateCompact() {
     if (typeof window === 'undefined') return;
     // Some mobile devices report unexpectedly large CSS widths; prefer input capability
     // and height constraints over width-only checks.
-    const nextTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
     const isNarrow = window.matchMedia('(max-width: 520px)').matches;
     const isShort = window.matchMedia('(max-height: 520px)').matches;
-    isTouchLike = nextTouchLike;
-    const nextCompact = nextTouchLike || isNarrow || isShort;
+    const isTouchLike = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+    const nextCompact = isTouchLike || isNarrow || isShort;
     isCompact = nextCompact;
-
-    // Always keep settings collapsed on compact/mobile.
-    if (nextCompact) controlsOpen = false;
   }
 
   onMount(() => {
@@ -92,39 +34,7 @@
     };
   });
 
-  $effect(() => {
-    // When the controls open, start the inactivity timer.
-    // When they close, reset all dimming state.
-    if (controlsOpen) {
-      controlsDimmed = false;
-      scheduleControlsDim();
-    } else {
-      controlsDimmed = false;
-      clearControlsIdleTimer();
-      clearControlsCollapseTimer();
-    }
-  });
-
-  onDestroy(() => {
-    clearControlsIdleTimer();
-    clearControlsCollapseTimer();
-  });
-
-  function setPreset(preset: DifficultyPreset) {
-    gameState.setDifficultyPreset(preset);
-  }
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (gameState.state !== 'PLAYING') return;
-
-    if (e.key === '1') setPreset('EASY');
-    if (e.key === '2') setPreset('NORMAL');
-    if (e.key === '3') setPreset('HARD');
-    if (e.key === '4') setPreset('INSANE');
-  }
 </script>
-
-<svelte:window onkeydown={handleKeyDown} />
 
 {#if gameState.state === 'PLAYING'}
   <div class="hud" class:compact={isCompact}>
@@ -161,67 +71,7 @@
             <span class="frost-indicator">FROST PHASE</span>
           {/if}
         </div>
-
-        <button
-          type="button"
-          class="metric settings-metric"
-          aria-label={controlsOpen ? 'Hide HUD settings' : 'Show HUD settings'}
-          aria-expanded={controlsOpen}
-          onclick={() => (controlsOpen = !controlsOpen)}
-        >
-          <span class="label">Settings</span>
-          <span class="value settings-icon" aria-hidden="true">⚙</span>
-        </button>
       </div>
-
-      {#if controlsOpen}
-        <div
-          class="controls"
-          class:dimmed={controlsDimmed}
-          aria-label="Difficulty and snow controls"
-          aria-hidden={controlsDimmed}
-          onpointerdown={bumpControlsActivity}
-          onpointerenter={() => {
-            // Hover-based restore on desktop; on touch, pointerenter may never fire.
-            if (!isTouchLike) bumpControlsActivity();
-          }}
-          onpointermove={() => {
-            if (!isTouchLike) bumpControlsActivity();
-          }}
-        >
-          <div class="control-row">
-            <span class="label">Difficulty</span>
-            <div class="buttons" role="group" aria-label="Difficulty presets">
-              {#each presets as preset (preset)}
-                <button
-                  type="button"
-                  class:selected={gameState.difficultyPreset === preset}
-                  onclick={() => {
-                    bumpControlsActivity();
-                    setPreset(preset);
-                    releaseUiFocus();
-                  }}
-                >
-                  {preset}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <label class="toggle">
-            <input
-              type="checkbox"
-              bind:checked={gameState.snowfallEnabled}
-              onchange={() => {
-                bumpControlsActivity();
-                releaseUiFocus();
-              }}
-            />
-            <span class="label">Snowfall</span>
-          </label>
-          <div class="hint">Hotkeys: 1–4</div>
-        </div>
-      {/if}
     </div>
   </div>
 
@@ -316,77 +166,6 @@
   .metric.rank-metric {
     flex: 1.15 1 0;
   }
-
-  .settings-metric {
-    flex: 0 0 auto;
-    min-width: 3.25rem;
-    cursor: pointer;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .settings-metric:focus-visible {
-    outline: 2px solid rgba(44, 95, 141, 0.6);
-    outline-offset: 3px;
-    border-radius: 10px;
-  }
-
-  .controls {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    margin-top: 0.55rem;
-    padding-top: 0.55rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    transition:
-      opacity 900ms ease,
-      filter 900ms ease;
-  }
-
-  .controls.dimmed {
-    opacity: 0.12;
-    filter: grayscale(1) saturate(0.2);
-  }
-
-  .control-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .buttons {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .controls button {
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 0.28rem 0.5rem;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: #2c5f8d;
-  }
-
-  .controls button.selected {
-    border-color: rgba(44, 95, 141, 0.5);
-    background: rgba(44, 95, 141, 0.08);
-  }
-
-  .toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .hint {
-    font-size: 0.8rem;
-    color: #888;
-  }
   
   .label {
     font-size: 0.75rem;
@@ -422,9 +201,6 @@
     display: none;
   }
 
-  .settings-icon {
-    color: #2c5f8d;
-  }
 
   .frost-indicator {
     display: inline-block;
@@ -496,10 +272,6 @@
 
     .label {
       font-size: 0.65rem;
-    }
-
-    .controls {
-      width: 100%;
     }
 
     .milestone {
