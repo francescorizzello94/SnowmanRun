@@ -13,6 +13,7 @@ function warn(message) {
 const rootDir = process.cwd();
 const buildDir = path.join(rootDir, 'build');
 const indexHtmlPath = path.join(buildDir, 'index.html');
+const staticDir = path.join(rootDir, 'static');
 
 if (!fs.existsSync(buildDir))
 	fail(`Missing build output directory: ${buildDir}. Run \"npm run build:itch\" first.`);
@@ -23,6 +24,36 @@ if (!fs.existsSync(indexHtmlPath))
 const appDir = path.join(buildDir, '_app');
 if (!fs.existsSync(appDir))
 	fail('Missing build/_app directory. Static build assets were not emitted.');
+
+function listFilesRecursive(baseDir, currentDir = baseDir) {
+	/** @type {string[]} */
+	const results = [];
+	const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+	for (const entry of entries) {
+		const absPath = path.join(currentDir, entry.name);
+		if (entry.isDirectory()) {
+			results.push(...listFilesRecursive(baseDir, absPath));
+			continue;
+		}
+		if (!entry.isFile()) continue;
+		results.push(path.relative(baseDir, absPath));
+	}
+	return results;
+}
+
+// Validate that everything in /static is copied to the build output.
+// This catches missing assets like static/models/* that won't show up in index.html.
+if (!fs.existsSync(staticDir)) {
+	warn(`Missing static directory: ${staticDir}`);
+} else {
+	const staticFiles = listFilesRecursive(staticDir);
+	for (const relPath of staticFiles) {
+		const expectedOutPath = path.join(buildDir, relPath);
+		if (!fs.existsSync(expectedOutPath)) {
+			fail(`Missing static asset in build output: ${path.join('build', relPath)}`);
+		}
+	}
+}
 
 const gltfPath = path.join(buildDir, 'snowman_scene.gltf');
 if (!fs.existsSync(gltfPath))
