@@ -13,6 +13,10 @@ const config = {
 
 	kit: {
 		// REQUIRED: itch.io serves games under subpaths (often in an iframe)
+		// NOTE: As of @sveltejs/kit 2.49.x, this does *not* fully apply to the adapter-static SPA
+		// fallback HTML (the generated fallback still includes root-absolute "/_app/..." URLs).
+		// We therefore also run a post-build rewrite for itch builds in scripts/fix-itch-paths.mjs.
+		// If a future SvelteKit version fixes the fallback generation, we can remove that script.
 		...(isItch ? { paths: { relative: true } } : {}),
 
 		adapter: isItch

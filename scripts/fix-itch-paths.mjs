@@ -16,8 +16,9 @@ if (!fs.existsSync(indexHtmlPath)) {
 let html = fs.readFileSync(indexHtmlPath, 'utf8');
 
 // Ensure the SvelteKit client entrypoints are relative so the game works under itch.io subpaths.
-// This is primarily needed when SSR is disabled (SPA), because SvelteKit's generated fallback
-// uses root-absolute /_app paths.
+// Even with kit.paths.relative = true, adapter-static's SPA fallback page currently emits
+// root-absolute /_app URLs in build/index.html (modulepreloads + dynamic imports).
+// Keep this script small and easy to delete if/when SvelteKit fixes fallback HTML generation.
 html = html
 	// href="/_app/..." or src='/_app/...'
 	.replace(/(["'])\/_app\//g, '$1./_app/')
