@@ -33,6 +33,12 @@ if (!fs.existsSync(gltfPath))
 const html = fs.readFileSync(indexHtmlPath, 'utf8');
 
 // Root-absolute URLs are the classic itch subpath failure mode.
+// This is intentionally a lightweight regex-based check (no HTML parser dependency).
+// Limitations:
+// - It won't correctly handle exotic attribute values containing the same quote character.
+// - It won't catch dynamically constructed paths (e.g. "'/' + '_app' + ...").
+// - It focuses on the practical failure mode: emitted root-absolute /_app and key asset paths.
+//
 // We consider href/src attributes that start with a single '/'.
 // - allow protocol-relative URLs (//...)
 // - allow data URLs
@@ -52,6 +58,15 @@ while ((match = rootAbsoluteAttr.exec(html)) !== null) {
 	) {
 		offenders.add(value);
 	}
+}
+
+// Catch root-absolute /_app references in JS string literals inside the HTML (e.g. import("/_app/...")),
+// which may not appear as href/src attributes.
+const rootAbsoluteAppString = /(["'])\/_app\/([^"']*)\1/g;
+while ((match = rootAbsoluteAppString.exec(html)) !== null) {
+	const captured = match[2];
+	const value = `/_app/${captured}`;
+	offenders.add(value);
 }
 
 if (offenders.size > 0) {
