@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getGameState } from '$lib/game';
+  import type { DifficultyPreset } from '$lib/game/difficulty.svelte';
   
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
+
+  const presets: DifficultyPreset[] = ['EASY', 'NORMAL', 'HARD', 'INSANE'];
 
   let isTouchLike = $state(false);
 
@@ -51,7 +54,9 @@
     <div class="content error">
       <h1>⚠️ Error</h1>
       <p>{gameState.errorMessage || 'An error occurred'}</p>
-      <button onclick={() => window.location.reload()}>Reload Page</button>
+      <button type="button" class="primary-button" onclick={() => window.location.reload()}>
+        Reload Page
+      </button>
     </div>
   </div>
 {:else if gameState.state === 'START'}
@@ -133,7 +138,39 @@
         </div>
       </div>
 
-      <button type="button" aria-keyshortcuts="Enter Space" onclick={handleStart}>Click to Play</button>
+      <div class="setup-card" aria-label="Game setup">
+        <h2>Game Setup</h2>
+        <div class="setup-body">
+          <div class="setup-block" aria-label="Difficulty selector">
+            <div class="segmented" role="group" aria-label="Difficulty preset">
+              {#each presets as preset (preset)}
+                <button
+                  type="button"
+                  class="segmented-btn"
+                  class:selected={gameState.difficultyPreset === preset}
+                  onclick={() => gameState.setDifficultyPreset(preset)}
+                >
+                  {preset}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <label class="setup-toggle" aria-label="Enable snowfall">
+            <input type="checkbox" bind:checked={gameState.snowfallEnabled} />
+            <span>Enable Snowfall</span>
+          </label>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="primary-button play-button"
+        aria-keyshortcuts="Enter Space"
+        onclick={handleStart}
+      >
+        Click to Play
+      </button>
       <p class="key-hint">Press <strong>Space</strong> or <strong>Enter</strong> to start</p>
       {#if gameState.bestScore > 0}
         <p class="best-score">Best Score: {gameState.bestScore.toFixed(1)}</p>
@@ -344,6 +381,101 @@
     font-weight: 600;
   }
 
+  .setup-card {
+    margin-top: 1.25rem;
+    padding: 1.05rem 1.25rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    text-align: left;
+  }
+
+  .setup-card h2 {
+    margin-bottom: 0.8rem;
+  }
+
+  .setup-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .setup-block {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex: 1 1 22rem;
+    min-width: 16rem;
+  }
+
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background: rgba(44, 95, 141, 0.08);
+    border: 1px solid rgba(44, 95, 141, 0.16);
+    flex-wrap: wrap;
+  }
+
+  .segmented-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #5c6f7f;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    font-size: 0.9rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    cursor: pointer;
+    line-height: 1;
+    transition:
+      background 150ms ease,
+      color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .segmented-btn:hover {
+    background: rgba(44, 95, 141, 0.12);
+    color: #2c5f8d;
+  }
+
+  .segmented-btn:active {
+    transform: scale(0.98);
+  }
+
+  .segmented-btn.selected {
+    background: #2c5f8d;
+    color: #ffffff;
+    box-shadow: 0 6px 16px rgba(44, 95, 141, 0.22);
+  }
+
+  .segmented-btn:focus-visible {
+    outline: 2px solid rgba(44, 95, 141, 0.55);
+    outline-offset: 2px;
+  }
+
+  .setup-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #2d3b45;
+    font-weight: 800;
+    user-select: none;
+    flex: 0 0 auto;
+  }
+
+  .setup-toggle input {
+    width: 1.05rem;
+    height: 1.05rem;
+    accent-color: #2c5f8d;
+  }
+
   @media (max-width: 540px) {
     .content {
       padding: 2.25rem 1.5rem;
@@ -358,10 +490,7 @@
     }
   }
   
-  button {
-    margin-top: 2rem;
-    padding: 1rem 2rem;
-    font-size: 1.5rem;
+  .primary-button {
     background: #2c5f8d;
     color: white;
     border: none;
@@ -369,14 +498,27 @@
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
   }
-  
-  button:hover {
+
+  .primary-button:hover {
     background: #1e4a6d;
     transform: scale(1.05);
   }
-  
-  button:active {
+
+  .primary-button:active {
     transform: scale(0.95);
+  }
+
+  .play-button {
+    margin-top: 1.45rem;
+    padding: 1rem 2rem;
+    font-size: 1.5rem;
+  }
+
+  /* Reload button should be compact */
+  .content.error .primary-button {
+    margin-top: 1.25rem;
+    padding: 0.75rem 1.1rem;
+    font-size: 1.05rem;
   }
   
   .best-score {
@@ -411,7 +553,7 @@
       font-size: 2.2rem;
     }
 
-    button {
+    .play-button {
       width: 100%;
       font-size: 1.25rem;
       padding: 0.9rem 1.25rem;
