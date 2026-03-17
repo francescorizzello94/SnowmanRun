@@ -190,6 +190,7 @@ Benefits:
 ### Archetype Behaviors
 
 #### SEEKER (Predictive Hunter)
+
 ```typescript
 // Calculate intercept point with player velocity lead
 const tToPlayer = toPlayer / speed;
@@ -205,18 +206,20 @@ if (toPlayer <= 15) ball.seekerLocked = true;
 ```
 
 #### FRACTURER (Split Bomb)
+
 ```typescript
 // Split trigger at Z = -13 ± variation
 if (ball.z >= -13 && !ball.hasSplit) {
-  // Create 2 fragments at ±1.5 lateral offset
-  // Fragment speed: 1.4× parent speed
-  spawnFragment(ball.x - 1.5, ball.speed * 1.4);
-  spawnFragment(ball.x + 1.5, ball.speed * 1.4);
-  ball.hasSplit = true;
+	// Create 2 fragments at ±1.5 lateral offset
+	// Fragment speed: 1.4× parent speed
+	spawnFragment(ball.x - 1.5, ball.speed * 1.4);
+	spawnFragment(ball.x + 1.5, ball.speed * 1.4);
+	ball.hasSplit = true;
 }
 ```
 
 #### VORTEX (Oscillator)
+
 ```typescript
 // Sinusoidal path with phase randomization
 const osc = Math.sin(ball.freq * ball.age + ball.phase) * ball.amp;
@@ -239,17 +242,17 @@ function applyTrail() {
       const dx = vertex.x - stamp.x;
       const dy = vertex.y - stamp.y;
       const d2 = dx*dx + dy*dy;
-      
+
       // Gaussian groove
       const groove = Math.exp(-d2 / (2 * sigma²)) * TRACK_DEPTH;
-      
+
       // Asymmetric berms (pushed snow on movement direction)
       const perpDist = Math.abs(dx);
       if (perpDist > TRACK_HALF_WIDTH) {
         const berm = gaussian(...) * BERM_HEIGHT * stamp.dir;
         vertex.z += berm;
       }
-      
+
       vertex.z -= groove * stamp.strength * fade;
     }
   }
@@ -267,8 +270,8 @@ function applyTrail() {
   const emitRate = speed * 58; // particles per second
   emitAcc += emitRate * delta;
   while (emitAcc >= 1) {
-    spawnOne(now);
-    emitAcc -= 1;
+  	spawnOne(now);
+  	emitAcc -= 1;
   }
   ```
 - **Custom shader with soft falloff:**
@@ -286,11 +289,11 @@ function applyTrail() {
 - **Auto-grounding algorithm:**
   ```typescript
   function placeModelOnGround(gltf: GLTF) {
-    const box = new THREE.Box3().setFromObject(gltf.scene);
-    box.min.multiplyScalar(SCALE);
-    box.max.multiplyScalar(SCALE);
-    const minY = box.min.y;
-    gltf.scene.position.y = GROUND_Y - minY - GROUND_SINK;
+  	const box = new THREE.Box3().setFromObject(gltf.scene);
+  	box.min.multiplyScalar(SCALE);
+  	box.max.multiplyScalar(SCALE);
+  	const minY = box.min.y;
+  	gltf.scene.position.y = GROUND_Y - minY - GROUND_SINK;
   }
   ```
 - **Shadow traversal:** `receiveShadow` and `castShadow` enabled on all meshes

@@ -74,6 +74,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 **Philosophy:** Each archetype requires different counter-strategies (positional reads vs. timing dodges vs. pattern exploitation).
 
 **Rendering:**
+
 - 3 procedural Voronoi-displaced geometry variants (visual variation)
 - Shared PBR snow material + seeker-specific red emissive variant
 - Scale range: `0.5–1.3` (standard) with archetype-specific multipliers
@@ -81,12 +82,14 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 ### Archetype Catalog
 
 #### 1. STANDARD (Baseline Threat)
+
 - **Behavior:** Straight-line movement at constant speed
 - **Counter:** Basic positional dodge
 - **Frequency:** Common at EASY (80%), rare at INSANE (10%)
 
 #### 2. SEEKER (Predictive Hunter) 🎯
-- **Behavior:** 
+
+- **Behavior:**
   - Calculates player intercept point using lead time (tToPlayer = distance / speed)
   - Predicted target: `playerX + playerVelocityX × leadTime`
   - Exponential smoothing: `α = 1 - e^(-3.6Δt)` for natural steering
@@ -97,6 +100,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 - **Frequency:** Scales from 5% (EASY) to 26% (INSANE)
 
 #### 3. FRACTURER (Split Bomb) 💥
+
 - **Behavior:**
   - Large slow snowball approaching
   - Splits into 2 fragments at Z = -13 ± variation
@@ -107,6 +111,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 - **Frequency:** Scales from 5% (EASY) to 27% (INSANE)
 
 #### 4. VORTEX (Oscillator) 🌀
+
 - **Behavior:**
   - Sinusoidal path: `x = baseX + sin(freq × age + phase) × amplitude`
   - Frequency: `2.5 ± 1.8 Hz`
@@ -116,6 +121,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 - **Frequency:** Scales from 10% (EASY) to 30% (INSANE)
 
 #### 5. HEAVY (Boulder) 🪨
+
 - **Behavior:**
   - Massive slow-moving obstacle
   - Occupies ~1.5 lanes (collision radius ×2.1)
@@ -134,12 +140,12 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 
 ### Preset Curves (Independent Bounds)
 
-| Preset | Spawn Interval | Speed Range | Profile Mix |
-|--------|---------------|-------------|-------------|
-| **EASY** | 1.7s → 0.95s | 7.5 → 14.5 | 80% Standard, 20% Elite |
-| **NORMAL** | 1.5s → 0.7s | 8.0 → 19.5 | 55% Standard, 45% Elite |
-| **HARD** | 1.25s → 0.55s | 8.5 → 23.5 | 30% Standard, 70% Elite |
-| **INSANE** | 1.05s → 0.45s | 9.0 → 28.5 | 10% Standard, 90% Elite |
+| Preset     | Spawn Interval | Speed Range | Profile Mix             |
+| ---------- | -------------- | ----------- | ----------------------- |
+| **EASY**   | 1.7s → 0.95s   | 7.5 → 14.5  | 80% Standard, 20% Elite |
+| **NORMAL** | 1.5s → 0.7s    | 8.0 → 19.5  | 55% Standard, 45% Elite |
+| **HARD**   | 1.25s → 0.55s  | 8.5 → 23.5  | 30% Standard, 70% Elite |
+| **INSANE** | 1.05s → 0.45s  | 9.0 → 28.5  | 10% Standard, 90% Elite |
 
 All curves ramp over **60 seconds** (linear interpolation).
 
@@ -221,6 +227,7 @@ All curves ramp over **60 seconds** (linear interpolation).
 - Fracture spawning: Always capture parent slot fields needed for fragment spawn (geometryVariant, scale, baseX, id, z) before deactivating the parent slot to avoid stale data.
 
 Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookkeeping under pool pressure.
+
 ### Asset Loading
 
 - **Lazy Geometry Creation:** Voronoi displacement computed on-demand
@@ -271,6 +278,7 @@ Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookk
 See [TUNING.md](./TUNING.md) for comprehensive constant reference.
 
 **Key Design Levers:**
+
 - **Gameplay Feel:** Friction/acceleration balance creates "ice skating" physics
 - **Difficulty Identity:** Per-preset bounds prevent unwanted escalation
 - **AI Sophistication:** Seeker lock distance, oscillation frequency, split timing

@@ -21,18 +21,22 @@ This document outlines where to find tuning constants for gameplay adjustments.
 Each difficulty preset has independent bounds (EASY never ramps into HARD behavior):
 
 ### EASY
+
 - Spawn interval: `1.7s → 0.95s` over 60 seconds
 - Speed: `7.5 → 14.5` units/second
 
 ### NORMAL
+
 - Spawn interval: `1.5s → 0.7s` over 60 seconds
 - Speed: `8.0 → 19.5` units/second
 
 ### HARD
+
 - Spawn interval: `1.25s → 0.55s` over 60 seconds
 - Speed: `8.5 → 23.5` units/second
 
 ### INSANE
+
 - Spawn interval: `1.05s → 0.45s` over 60 seconds
 - Speed: `9.0 → 28.5` units/second
 
@@ -57,20 +61,25 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 ### Snowball Profile Probabilities (per difficulty)
 
 **EASY:**
+
 - Standard: 80%, Vortex: 10%, Seeker: 5%, Fracturer: 5%, Heavy: 0%
 
 **NORMAL:**
+
 - Standard: 55%, Vortex: 20%, Seeker: 12%, Fracturer: 10%, Heavy: 3%
 
 **HARD:**
+
 - Standard: 30%, Vortex: 25%, Seeker: 22%, Fracturer: 18%, Heavy: 5%
 
 **INSANE:**
+
 - Standard: 10%, Vortex: 30%, Seeker: 26%, Fracturer: 27%, Heavy: 7%
 
 ### Elite Profile Parameters
 
 **SEEKER (Predictive Homing):**
+
 - `SEEKER_SCALE_BASE = 0.95` - Base size
 - `SEEKER_SPEED_MUL = 1.05` - Speed multiplier
 - `SEEKER_HOMING_STRENGTH = 0.68` - Intercept smoothing factor
@@ -78,18 +87,21 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 - Lead calculation with exponential smoothing (α = 1 - e^(-3.6Δt))
 
 **FRACTURER (Splits on approach):**
+
 - `FRACTURER_SCALE_BASE = 1.45` - Large initial size
 - `FRACTURER_SPEED_MUL = 0.7` - Slower to compensate for split
 - `FRACTURER_Z_BASE = -13.0` - Split trigger distance
 - Split creates 2 fragments at ±1.5 units, 1.4× speed
 
 **VORTEX (Side-to-side oscillation):**
+
 - `VORTEX_SCALE_BASE = 0.85` - Smaller, faster
 - `VORTEX_FREQ_BASE = 2.5` - Oscillation frequency (Hz)
 - `VORTEX_AMP_MAX = 0.95` - Maximum sway amplitude
 - Sinusoidal path with phase randomization
 
 **HEAVY (Massive slow boulder):**
+
 - `HEAVY_SCALE_BASE = 2.35` - Largest visual size
 - `HEAVY_SPEED_MUL = 0.55` - Much slower
 - `HEAVY_COLLISION_RADIUS_MUL = 2.1` - Occupies ~1.5 lanes
