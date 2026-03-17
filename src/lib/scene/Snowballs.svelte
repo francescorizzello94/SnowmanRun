@@ -324,7 +324,6 @@
   let renderTick = $state(0);
   let renderAcc = 0;
   const RENDER_HZ = 30;
-  let snowballsView = $state<typeof gameState.snowballs>([]);
   
   function findGroundMesh() {
     if (groundMesh) return;
@@ -389,8 +388,10 @@
     renderAcc += delta;
     if (renderAcc >= 1 / RENDER_HZ) {
       renderAcc = 0;
+      // Incrementing renderTick is the sole invalidation signal for the template.
+      // The pool array reference never changes, so we rely on this reactive
+      // counter to force Svelte to re-read the raw slot properties.
       renderTick = (renderTick + 1) % 1000000;
-      snowballsView = gameState.snowballs.slice();
     }
 
     // Update dash state (auto-triggered by distance milestones)
@@ -495,18 +496,17 @@
       if (snowball.profile === 'FRACTURER' && !snowball.hasFractured && snowball.z >= snowball.fractureZ) {
         snowball.hasFractured = true;
 
+        // Capture parent fields BEFORE deactivation resets the slot
         const parentFracturerId = snowball.id;
-
         const splitZ = snowball.z;
         const baseX = snowball.baseX;
-        const fragScale = Math.max(FRAGMENT_SCALE_RATIO, snowball.scale * FRAGMENT_SCALE_RATIO);
-        const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * snowball.scale;
+        const parentScale = snowball.scale;
+        const parentGeometryVariant = snowball.geometryVariant;
+        const fragScale = Math.max(FRAGMENT_SCALE_RATIO, parentScale * FRAGMENT_SCALE_RATIO);
+        const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * parentScale;
 
-        // Remove the parent first (keeps loop safe while iterating backwards)
-        snowballs.splice(i, 1);
-
-        // Track this as a single "fracturer encounter" that resolves when both fragments pass.
-        gameState.registerFracturerSplit(parentFracturerId, 2);
+        // Deactivate parent (resets all fields — reads above are safe)
+        gameState.deactivateSnowballDirect(snowball);
 
         // Common parameters for fracture fragments
         const fragmentParams = {
@@ -521,16 +521,22 @@
         const leftX = Math.max(-7, Math.min(7, baseX - offset));
         const rightX = Math.max(-7, Math.min(7, baseX + offset));
 
-        gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
+        const leftFrag = gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeometryVariant, {
           ...fragmentParams,
           baseX: leftX,
           parentFracturerId,
         });
-        gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, snowball.geometryVariant, {
+        const rightFrag = gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeometryVariant, {
           ...fragmentParams,
           baseX: rightX,
           parentFracturerId,
         });
+
+        // Track encounter only for fragments that actually spawned
+        const spawnedCount = (leftFrag ? 1 : 0) + (rightFrag ? 1 : 0);
+        if (spawnedCount > 0) {
+          gameState.registerFracturerSplit(parentFracturerId, spawnedCount);
+        }
         continue;
       }
       
@@ -562,7 +568,7 @@
   		} else {
   			gameState.recordDodge(snowball.profile);
   		}
-        snowballs.splice(i, 1);
+        gameState.deactivateSnowballDirect(snowball);
         continue; // Skip collision check for removed snowball
       }
       
@@ -618,11 +624,9 @@
   });
 </script>
 
-<!-- Snowball visuals -->
-{#if renderTick >= 0}
-  {@const _renderTick = renderTick}
-{/if}
-{#each snowballsView as snowball (snowball.id)}
+<!-- Snowball visuals: renderTick drives re-evaluation of the fixed pool -->
+{#key renderTick}
+{#each gameState.snowballs as snowball, index (index)}
   {#if snowball.active}
     {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
     <!-- Organic wobble: pivot offset via Group+Mesh offset -->
@@ -671,6 +675,7 @@
     {/if}
   {/if}
 {/each}
+{/key}
 
 <!-- Player hitbox debug visualization -->
 {#if DEBUG_HITBOXES}
