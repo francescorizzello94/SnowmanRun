@@ -33,6 +33,11 @@ To create a production version of your app:
 npm run build
 ```
 
+Performance notes:
+
+- The engine uses fixed-size preallocated pools for high-frequency entities (snowballs, particles) to avoid per-frame heap allocations and minimize GC pauses.
+- Rendering of pooled entities is invalidated by a low-frequency `renderTick` (30Hz) instead of proxying the pool into Svelte reactivity. See `TUNING.md` and `IMPLEMENTATION.md` for details.
+
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

@@ -48,6 +48,12 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 - `STAGGER_ROW_GAP_Z = 2.2` - Distance between staggered rows
 - `MAX_BLOCKED_LANES = 3` - Maximum simultaneous lane occupancy (even on INSANE)
 
+## Pooling & Capacity
+
+- `MAX_SNOWBALLS = 100` - Default preallocated pool size (adjust in `src/lib/game/state.svelte.ts`).
+- If you increase `MAX_SNOWBALLS`, keep an eye on memory vs. peak concurrency; larger pools reduce spawn failures at the cost of resident memory.
+- `addSnowball()` now returns the activated slot or `null` when pool exhausted — callers should handle `null` to preserve deterministic game bookkeeping (e.g., fracturer fragment tracking).
+
 ### Snowball Profile Probabilities (per difficulty)
 
 **EASY:**

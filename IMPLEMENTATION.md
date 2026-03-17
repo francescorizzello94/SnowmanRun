@@ -135,6 +135,21 @@ src/
 - **Backward iteration** when removing items during loop
 - Handles spawning, archetype behaviors, collision, and cleanup
 
+### Fixed-Size Pooling & Render Invalidation (Performance)
+
+The runtime now uses a preallocated fixed-size object pool for `snowballs` to eliminate heap allocations in the rAF hot-path. Key implementation notes:
+
+- A constant `MAX_SNOWBALLS` defines the pool size; the array is allocated at game start and never structurally mutated during gameplay (no `.push()`, `.splice()`).
+- Each slot is a plain JS `Snowball` object with numeric defaults and `active: boolean`. Slots are reset in-place when deactivated to preserve object shapes and optimize hidden classes.
+- `addSnowball()` acquires an inactive slot and returns the activated slot (or `null` if exhausted). Callers must handle spawn failures deterministically.
+- The renderer's template is invalidated using a separate low-frequency `renderTick` (e.g. 30Hz) and the template is keyed on this tick; the pool objects themselves remain unproxied to avoid Svelte runtime overhead.
+
+Benefits:
+
+- Eliminates transient allocations per frame that create GC pressure.
+- Keeps per-frame work O(1) and predictable, improving 60+ FPS stability.
+- Preserves deterministic game behavior by returning spawn success/failure to callers (useful for fracture bookkeeping).
+
 ### Camera System
 
 - **Smooth following** using Svelte motion springs

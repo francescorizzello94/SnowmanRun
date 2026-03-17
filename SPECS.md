@@ -214,6 +214,13 @@ All curves ramp over **60 seconds** (linear interpolation).
   - Reactive: UI state (distance, time, scores)
   - Non-reactive: Physics (playerX, velocityX, snowball arrays)
 
+#### Fixed-Size Pooling & Render Invalidation
+
+- Pools: High-frequency entities (snowballs, particles) use preallocated fixed-size pools with `active` toggles. Avoid structural array mutations in the rAF loop.
+- Template invalidation: Drive Svelte updates using a low-frequency `renderTick` (e.g., 30Hz) and `#key renderTick` to re-evaluate the rendering block without proxying the pool array.
+- Fracture spawning: Always capture parent slot fields needed for fragment spawn (geometryVariant, scale, baseX, id, z) before deactivating the parent slot to avoid stale data.
+
+Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookkeeping under pool pressure.
 ### Asset Loading
 
 - **Lazy Geometry Creation:** Voronoi displacement computed on-demand

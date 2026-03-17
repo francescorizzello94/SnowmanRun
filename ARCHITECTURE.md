@@ -89,6 +89,27 @@ const { stop } = useTask((delta) => {
 - ✅ Automatic pause when tab inactive
 - ✅ Battery-efficient execution
 
+### Fixed-Size Object Pooling (New)
+
+**Implementation:** Preallocated fixed-size pool for high-frequency entities (see `src/lib/game/state.svelte.ts`). Slots are plain JS objects with `active: boolean` toggles and numeric defaults. Template invalidation uses a separate `renderTick` counter to avoid proxying the pool into Svelte reactivity.
+
+```text
+MAX_SNOWBALLS = 100
+pool = Array(MAX_SNOWBALLS).fill(slot)
+slot.active = true/false
+```
+
+**Rationale & Benefits:**
+
+- Zero heap allocations during the rAF hot-path: no `new`, no `.push()`, no `.splice()`.
+- Prevents V8 GC pauses caused by transient arrays/objects created each frame.
+- Maintains O(1) per-frame updates by mutating slot properties directly.
+
+**Guidelines:**
+
+- Capture any parent slot fields before deactivating a slot if those fields are needed for immediate follow-up (e.g., fragment spawning).
+- Use a `renderTick` (low-frequency, e.g., 30Hz) to drive Svelte template updates; do not wrap the pool in `$state` proxies.
+
 ### Bottleneck Mitigation ✓
 
 **Implementation:** O(1) updates via direct reference
