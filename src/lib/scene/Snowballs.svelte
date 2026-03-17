@@ -324,7 +324,7 @@
   let renderTick = $state(0);
   let renderAcc = 0;
   const RENDER_HZ = 30;
-  let snowballsView = $state<typeof gameState.snowballs>([]);
+  let snowballsView = $state(gameState.snowballs);
   
   function findGroundMesh() {
     if (groundMesh) return;
@@ -390,7 +390,7 @@
     if (renderAcc >= 1 / RENDER_HZ) {
       renderAcc = 0;
       renderTick = (renderTick + 1) % 1000000;
-      snowballsView = gameState.snowballs.slice();
+      snowballsView = gameState.snowballs;
     }
 
     // Update dash state (auto-triggered by distance milestones)
@@ -503,7 +503,7 @@
         const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * snowball.scale;
 
         // Remove the parent first (keeps loop safe while iterating backwards)
-        snowballs.splice(i, 1);
+        gameState.deactivateSnowballDirect(snowball);
 
         // Track this as a single "fracturer encounter" that resolves when both fragments pass.
         gameState.registerFracturerSplit(parentFracturerId, 2);
@@ -562,7 +562,7 @@
   		} else {
   			gameState.recordDodge(snowball.profile);
   		}
-        snowballs.splice(i, 1);
+        gameState.deactivateSnowballDirect(snowball);
         continue; // Skip collision check for removed snowball
       }
       
@@ -622,7 +622,8 @@
 {#if renderTick >= 0}
   {@const _renderTick = renderTick}
 {/if}
-{#each snowballsView as snowball (snowball.id)}
+{#each snowballsView as snowball, index (index)}
+  {@const _tick = renderTick}
   {#if snowball.active}
     {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
     <!-- Organic wobble: pivot offset via Group+Mesh offset -->

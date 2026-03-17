@@ -89,6 +89,24 @@ export interface Snowball {
 	hopFreq: number;
 }
 
+const MAX_SNOWBALLS = 100;
+
+type SnowballSpawnOptions = {
+	profile?: SnowballProfile;
+	speedMul?: number;
+	collisionRadiusMul?: number;
+	wobbleMul?: number;
+	hopMul?: number;
+	baseX?: number;
+	parentFracturerId?: number;
+	vortexAmp?: number;
+	vortexFreq?: number;
+	vortexPhase?: number;
+	fractureZ?: number;
+	hasFractured?: boolean;
+	seekerLocked?: boolean;
+};
+
 const GAME_STATE_KEY = Symbol('game-state');
 
 /**
@@ -180,8 +198,10 @@ export class GameStateManager {
 
 	// Snowball pool - maintained as raw array for O(1) updates
 	// CRITICAL: Direct property updates (snowball.z += delta) avoid array searches
-	snowballs: Snowball[] = []; // Plain objects, not reactive proxies
+	snowballs: Snowball[]; // Fixed-size plain-object pool, not reactive proxies
 	nextSnowballId: number = 1;
+	private nextSnowballPoolIndex: number = 0;
+	private hasLoggedSnowballPoolExhaustion: boolean = false;
 
 	// Fracturer encounter bookkeeping (non-reactive)
 	// FRACTURER parents are removed when they split, so we count them as "dodged"
@@ -227,6 +247,7 @@ export class GameStateManager {
 		this.difficulty = new DifficultyManager();
 		this.spawner = new SnowballSpawner(this.difficulty);
 		this.collision = new CollisionDetector();
+		this.snowballs = this.createSnowballPool();
 
 		// Environment-gated persistent storage access
 		if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -269,8 +290,10 @@ export class GameStateManager {
 		this.digitalRightHeld = false;
 		this.analogActive = false;
 		this.analogAxisX = 0;
-		this.snowballs = [];
+		this.resetSnowballPool();
 		this.nextSnowballId = 1;
+		this.nextSnowballPoolIndex = 0;
+		this.hasLoggedSnowballPoolExhaustion = false;
 		this.fracturerEncounters = new SvelteMap();
 		this.lastSpawnTime = 0;
 		this.lastLaneIndex = -1;
@@ -510,10 +533,102 @@ export class GameStateManager {
 		}
 	}
 
+	private createSnowballPool(): Snowball[] {
+		const snowballs = new Array<Snowball>(MAX_SNOWBALLS);
+		for (let i = 0; i < MAX_SNOWBALLS; i += 1) {
+			snowballs[i] = this.createSnowballSlot();
+		}
+		return snowballs;
+	}
+
+	private createSnowballSlot(): Snowball {
+		return {
+			id: 0,
+			x: 0,
+			baseX: 0,
+			z: 0,
+			groundY: 0,
+			active: false,
+			scale: 0,
+			rollAngle: 0,
+			rotationY: 0,
+			geometryVariant: 0,
+			profile: 'STANDARD',
+			parentFracturerId: undefined,
+			speedMul: 0,
+			collisionRadiusMul: 0,
+			wobbleMul: 0,
+			hopMul: 0,
+			vortexAmp: 0,
+			vortexFreq: 0,
+			vortexPhase: 0,
+			fractureZ: 0,
+			hasFractured: false,
+			seekerLocked: undefined,
+			wobbleOffsetX: 0,
+			wobbleOffsetZ: 0,
+			hopPhase: 0,
+			hopFreq: 0
+		};
+	}
+
+	private resetSnowballSlot(snowball: Snowball): void {
+		snowball.id = 0;
+		snowball.x = 0;
+		snowball.baseX = 0;
+		snowball.z = 0;
+		snowball.groundY = 0;
+		snowball.active = false;
+		snowball.scale = 0;
+		snowball.rollAngle = 0;
+		snowball.rotationY = 0;
+		snowball.geometryVariant = 0;
+		snowball.profile = 'STANDARD';
+		snowball.parentFracturerId = undefined;
+		snowball.speedMul = 0;
+		snowball.collisionRadiusMul = 0;
+		snowball.wobbleMul = 0;
+		snowball.hopMul = 0;
+		snowball.vortexAmp = 0;
+		snowball.vortexFreq = 0;
+		snowball.vortexPhase = 0;
+		snowball.fractureZ = 0;
+		snowball.hasFractured = false;
+		snowball.seekerLocked = undefined;
+		snowball.wobbleOffsetX = 0;
+		snowball.wobbleOffsetZ = 0;
+		snowball.hopPhase = 0;
+		snowball.hopFreq = 0;
+	}
+
+	private resetSnowballPool(): void {
+		for (let i = 0; i < this.snowballs.length; i += 1) {
+			this.resetSnowballSlot(this.snowballs[i]);
+		}
+	}
+
+	private acquireSnowballSlot(): Snowball | null {
+		const poolSize = this.snowballs.length;
+		for (let attempt = 0; attempt < poolSize; attempt += 1) {
+			const index = (this.nextSnowballPoolIndex + attempt) % poolSize;
+			const snowball = this.snowballs[index];
+			if (!snowball.active) {
+				this.nextSnowballPoolIndex = (index + 1) % poolSize;
+				return snowball;
+			}
+		}
+
+		if (!this.hasLoggedSnowballPoolExhaustion && typeof console !== 'undefined') {
+			console.warn(`[GameStateManager] Snowball pool exhausted (${MAX_SNOWBALLS}). Spawn skipped.`);
+			this.hasLoggedSnowballPoolExhaustion = true;
+		}
+
+		return null;
+	}
+
 	/**
-	 * Add snowball to pool
-	 * Performance: O(1) array push
-	 * Procedural Variation: Randomizes scale, rotation, and geometry variant
+	 * Activate a pre-allocated snowball slot from the fixed pool.
+	 * Performance: O(n) scan over a fixed-size array, zero heap allocation.
 	 */
 	addSnowball(
 		x: number,
@@ -521,59 +636,50 @@ export class GameStateManager {
 		scale: number,
 		rotationY: number,
 		geometryVariant: number,
-		options?: {
-			profile?: SnowballProfile;
-			speedMul?: number;
-			collisionRadiusMul?: number;
-			wobbleMul?: number;
-			hopMul?: number;
-			baseX?: number;
-			parentFracturerId?: number;
-			vortexAmp?: number;
-			vortexFreq?: number;
-			vortexPhase?: number;
-			fractureZ?: number;
-			hasFractured?: boolean;
-			seekerLocked?: boolean;
-		}
+		options?: SnowballSpawnOptions
 	) {
-		this.snowballs.push({
-			id: this.nextSnowballId++,
-			x,
-			baseX: options?.baseX ?? x,
-			z,
-			groundY: 0, // Will be set by terrain snapping
-			active: true,
-			scale,
-			rollAngle: 0, // Starting rotation
-			rotationY,
-			geometryVariant,
-			profile: options?.profile ?? 'STANDARD',
-			parentFracturerId: options?.parentFracturerId,
-			speedMul: options?.speedMul ?? 1.0,
-			collisionRadiusMul: options?.collisionRadiusMul ?? 1.0,
-			wobbleMul: options?.wobbleMul ?? 1.0,
-			hopMul: options?.hopMul ?? 1.0,
-			vortexAmp: options?.vortexAmp ?? 0.0,
-			vortexFreq: options?.vortexFreq ?? 0.0,
-			vortexPhase: options?.vortexPhase ?? 0.0,
-			fractureZ: options?.fractureZ ?? -12.0,
-			hasFractured: options?.hasFractured ?? false,
-			wobbleOffsetX: (Math.random() * 2 - 1) * 0.18,
-			wobbleOffsetZ: (Math.random() * 2 - 1) * 0.14,
-			hopPhase: Math.random() * Math.PI * 2,
-			hopFreq: 7.0 + Math.random() * 7.0
-		});
+		const snowball = this.acquireSnowballSlot();
+		if (!snowball) return;
+
+		this.hasLoggedSnowballPoolExhaustion = false;
+		snowball.id = this.nextSnowballId++;
+		snowball.x = x;
+		snowball.baseX = options?.baseX ?? x;
+		snowball.z = z;
+		snowball.groundY = 0;
+		snowball.active = true;
+		snowball.scale = scale;
+		snowball.rollAngle = 0;
+		snowball.rotationY = rotationY;
+		snowball.geometryVariant = geometryVariant;
+		snowball.profile = options?.profile ?? 'STANDARD';
+		snowball.parentFracturerId = options?.parentFracturerId;
+		snowball.speedMul = options?.speedMul ?? 1.0;
+		snowball.collisionRadiusMul = options?.collisionRadiusMul ?? 1.0;
+		snowball.wobbleMul = options?.wobbleMul ?? 1.0;
+		snowball.hopMul = options?.hopMul ?? 1.0;
+		snowball.vortexAmp = options?.vortexAmp ?? 0.0;
+		snowball.vortexFreq = options?.vortexFreq ?? 0.0;
+		snowball.vortexPhase = options?.vortexPhase ?? 0.0;
+		snowball.fractureZ = options?.fractureZ ?? -12.0;
+		snowball.hasFractured = options?.hasFractured ?? false;
+		snowball.seekerLocked = options?.seekerLocked;
+		snowball.wobbleOffsetX = (Math.random() * 2 - 1) * 0.18;
+		snowball.wobbleOffsetZ = (Math.random() * 2 - 1) * 0.14;
+		snowball.hopPhase = Math.random() * Math.PI * 2;
+		snowball.hopFreq = 7.0 + Math.random() * 7.0;
 	}
 
 	/**
-	 * Remove snowball from pool
-	 * Performance: O(n) but called infrequently (only on cleanup)
+	 * Deactivate a snowball slot by id without mutating pool structure.
 	 */
 	removeSnowball(id: number) {
-		const index = this.snowballs.findIndex((s) => s.id === id);
-		if (index >= 0) {
-			this.snowballs.splice(index, 1);
+		for (let i = 0; i < this.snowballs.length; i += 1) {
+			const snowball = this.snowballs[i];
+			if (snowball.active && snowball.id === id) {
+				this.resetSnowballSlot(snowball);
+				return;
+			}
 		}
 	}
 
@@ -589,7 +695,7 @@ export class GameStateManager {
 	 * Deactivate snowball (O(1) via reference)
 	 */
 	deactivateSnowballDirect(snowball: Snowball) {
-		snowball.active = false;
+		this.resetSnowballSlot(snowball);
 	}
 }
 
