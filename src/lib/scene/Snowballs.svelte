@@ -324,7 +324,6 @@
   let renderTick = $state(0);
   let renderAcc = 0;
   const RENDER_HZ = 30;
-  let snowballsView = $state.raw(gameState.snowballs);
   
   function findGroundMesh() {
     if (groundMesh) return;
@@ -389,8 +388,10 @@
     renderAcc += delta;
     if (renderAcc >= 1 / RENDER_HZ) {
       renderAcc = 0;
+      // Incrementing renderTick is the sole invalidation signal for the template.
+      // The pool array reference never changes, so we rely on this reactive
+      // counter to force Svelte to re-read the raw slot properties.
       renderTick = (renderTick + 1) % 1000000;
-      snowballsView = gameState.snowballs;
     }
 
     // Update dash state (auto-triggered by distance milestones)
@@ -623,12 +624,9 @@
   });
 </script>
 
-<!-- Snowball visuals -->
-{#if renderTick >= 0}
-  {@const _renderTick = renderTick}
-{/if}
-{#each snowballsView as snowball, index (index)}
-  {@const _tick = renderTick}
+<!-- Snowball visuals: renderTick drives re-evaluation of the fixed pool -->
+{#key renderTick}
+{#each gameState.snowballs as snowball, index (index)}
   {#if snowball.active}
     {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
     <!-- Organic wobble: pivot offset via Group+Mesh offset -->
@@ -677,6 +675,7 @@
     {/if}
   {/if}
 {/each}
+{/key}
 
 <!-- Player hitbox debug visualization -->
 {#if DEBUG_HITBOXES}
