@@ -629,6 +629,7 @@ export class GameStateManager {
 	/**
 	 * Activate a pre-allocated snowball slot from the fixed pool.
 	 * Performance: O(n) scan over a fixed-size array, zero heap allocation.
+	 * Returns the activated slot, or null if the pool is exhausted.
 	 */
 	addSnowball(
 		x: number,
@@ -637,9 +638,9 @@ export class GameStateManager {
 		rotationY: number,
 		geometryVariant: number,
 		options?: SnowballSpawnOptions
-	) {
+	): Snowball | null {
 		const snowball = this.acquireSnowballSlot();
-		if (!snowball) return;
+		if (!snowball) return null;
 
 		this.hasLoggedSnowballPoolExhaustion = false;
 		snowball.id = this.nextSnowballId++;
@@ -668,6 +669,7 @@ export class GameStateManager {
 		snowball.wobbleOffsetZ = (Math.random() * 2 - 1) * 0.14;
 		snowball.hopPhase = Math.random() * Math.PI * 2;
 		snowball.hopFreq = 7.0 + Math.random() * 7.0;
+		return snowball;
 	}
 
 	/**
