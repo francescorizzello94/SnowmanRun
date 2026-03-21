@@ -2,7 +2,6 @@
   import { onDestroy } from 'svelte';
   import { T, useTask } from '@threlte/core';
   import { useGltf } from '@threlte/extras';
-  import { asset } from '$app/paths';
   import { getGameState } from '$lib/game';
   import * as THREE from 'three';
 
@@ -244,8 +243,28 @@
   // Frost Phase visual effect: icy shield aura
   const frostShieldGeometry = new THREE.SphereGeometry(1.8, 24, 24);
 
+  function resolveSnowmanGltfUrl(): string {
+    if (typeof window === 'undefined') {
+      return '/snowman_scene.gltf';
+    }
+
+    const moduleUrl = new URL(import.meta.url);
+    const appIndex = moduleUrl.pathname.indexOf('/_app/');
+    if (appIndex >= 0) {
+      const deployPrefix = moduleUrl.pathname.slice(0, appIndex);
+      return `${moduleUrl.origin}${deployPrefix}/snowman_scene.gltf`;
+    }
+
+    const itchPrefix = window.location.pathname.match(/^\/html\/[^/]+\//);
+    if (itchPrefix) {
+      return `${window.location.origin}${itchPrefix[0]}snowman_scene.gltf`;
+    }
+
+    return new URL('./snowman_scene.gltf', window.location.href).toString();
+  }
+
   // Load snowman GLTF with explicit lifecycle management
-  const snowmanGltfUrl = asset('/snowman_scene.gltf');
+  const snowmanGltfUrl = resolveSnowmanGltfUrl();
 
   const gltfPromise = useGltf(snowmanGltfUrl)
     .then((gltf) => {
