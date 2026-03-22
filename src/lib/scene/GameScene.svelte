@@ -10,12 +10,16 @@
   import SnowSpurt from './SnowSpurt.svelte';
 
   const gameState = getGameState();
+
+  // Cap rendering resolution to 1.5× to prevent GPU fill-rate saturation on Retina/HiDPI displays.
+  const maxDpr = Math.min(window.devicePixelRatio, 1.5);
 </script>
 
 <div class="scene-container">
   <Canvas 
     renderMode="always"
     shadows
+    dpr={maxDpr}
   >
     <!-- Black void backdrop -->
     <T.Color attach="background" args={['#000000']} />

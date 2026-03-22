@@ -8,8 +8,8 @@
   // Ground configuration - lane-sized snow with black surround
   const GROUND_WIDTH = 15;
   const GROUND_LENGTH = 120;
-  const GROUND_SEGMENTS_X = 80;
-  const GROUND_SEGMENTS_Z = 150;
+  const GROUND_SEGMENTS_X = 60;
+  const GROUND_SEGMENTS_Z = 100;
   
   /**
    * Procedural noise function for terrain generation
