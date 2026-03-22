@@ -39,14 +39,14 @@
   intensity={4.8}
   color="#ffffff"
   castShadow
-  shadow.camera.left={-12}
-  shadow.camera.right={12}
-  shadow.camera.top={16}
-  shadow.camera.bottom={-16}
-  shadow.camera.near={0.1}
-  shadow.camera.far={100}
-  shadow.mapSize.width={2048}
-  shadow.mapSize.height={2048}
+  shadow.camera.left={-8}
+  shadow.camera.right={8}
+  shadow.camera.top={6}
+  shadow.camera.bottom={-12}
+  shadow.camera.near={0.5}
+  shadow.camera.far={60}
+  shadow.mapSize.width={1024}
+  shadow.mapSize.height={1024}
   shadow.bias={-0.0001}
   shadow.normalBias={0.015}
 />
