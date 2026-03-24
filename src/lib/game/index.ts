@@ -12,3 +12,14 @@ export {
 export { DifficultyManager } from './difficulty.svelte';
 export { SnowballSpawner } from './spawner.svelte';
 export { CollisionDetector } from './collision.svelte';
+
+// Export quality system
+export {
+	createQualityContext,
+	getQualityContext,
+	detectQualityTier,
+	getPreset,
+	type QualityTier,
+	type QualitySettings,
+	type QualityContext
+} from './quality.svelte';

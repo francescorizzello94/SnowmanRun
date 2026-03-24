@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
   import { T } from '@threlte/core';
-  import { getGameState } from '$lib/game';
+  import { getGameState, getQualityContext } from '$lib/game';
   import Camera from './Camera.svelte';
   import Environment from './Environment.svelte';
   import Player from './Player.svelte';
@@ -10,15 +10,16 @@
   import SnowSpurt from './SnowSpurt.svelte';
 
   const gameState = getGameState();
+  const { settings: Q } = getQualityContext();
 
-  // Cap rendering resolution to 1.5× to prevent GPU fill-rate saturation on Retina/HiDPI displays.
-  const maxDpr = Math.min(window.devicePixelRatio, 1.5);
+  // Quality-aware DPR cap
+  const maxDpr = Math.min(window.devicePixelRatio, Q.maxDpr);
 </script>
 
 <div class="scene-container">
   <Canvas 
     renderMode="always"
-    shadows
+    shadows={Q.shadowMapSize > 0}
     dpr={maxDpr}
   >
     <!-- Black void backdrop -->

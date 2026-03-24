@@ -70,8 +70,42 @@ export class SnowballSpawner {
 	readonly HEAVY_WOBBLE_MUL = 0.55;
 	readonly HEAVY_HOP_MUL = 0.18; // Minimal hop for massive object
 
+	// Static weight arrays — zero per-spawn allocation
+	private static readonly _baseWeights = [1.0, 1.15, 1.45, 1.15, 1.0];
+	private readonly _gapWeights = [1.0, 1.05, 0.85, 1.05, 1.0];
+	private readonly _weights = [1.0, 1.0, 1.0, 1.0, 1.0];
+
 	// Dependency injection: DifficultyManager instance
 	private difficulty: DifficultyManager;
+
+	// Reusable spawn options object — zero per-lane allocation
+	private readonly _spawnOpts: {
+		profile: SnowballProfile;
+		baseX: number;
+		speedMul: number;
+		collisionRadiusMul: number;
+		wobbleMul: number;
+		hopMul: number;
+		vortexAmp: number;
+		vortexFreq: number;
+		vortexPhase: number;
+		fractureZ: number;
+		hasFractured: boolean;
+		seekerLocked: boolean;
+	} = {
+		profile: 'STANDARD',
+		baseX: 0,
+		speedMul: 1,
+		collisionRadiusMul: 1,
+		wobbleMul: 1,
+		hopMul: 1,
+		vortexAmp: 0,
+		vortexFreq: 0,
+		vortexPhase: 0,
+		fractureZ: -12,
+		hasFractured: false,
+		seekerLocked: false
+	};
 
 	constructor(difficulty: DifficultyManager) {
 		this.difficulty = difficulty;
@@ -130,24 +164,28 @@ export class SnowballSpawner {
 		return bestLane;
 	}
 
-	private pickWeightedUnique(weights: number[], count: number, excludeMask: number): number[] {
-		const picked: number[] = [];
-		const available = new Array<boolean>(weights.length).fill(true);
+	// Reusable arrays for pickWeightedUnique — zero per-call allocation
+	private readonly _picked: number[] = new Array(5).fill(0);
+	private readonly _available: boolean[] = new Array(5).fill(true);
+	private _pickedCount = 0;
+
+	private pickWeightedUnique(weights: number[], count: number, excludeMask: number): void {
+		this._pickedCount = 0;
 		for (let i = 0; i < weights.length; i++) {
-			if (excludeMask & (1 << i)) available[i] = false;
+			this._available[i] = !(excludeMask & (1 << i));
 		}
 
 		for (let k = 0; k < count; k++) {
 			let sum = 0;
 			for (let i = 0; i < weights.length; i++) {
-				if (!available[i]) continue;
+				if (!this._available[i]) continue;
 				sum += Math.max(0, weights[i]);
 			}
 			if (sum <= 0) break;
 			let r = Math.random() * sum;
 			let chosen = -1;
 			for (let i = 0; i < weights.length; i++) {
-				if (!available[i]) continue;
+				if (!this._available[i]) continue;
 				r -= Math.max(0, weights[i]);
 				if (r <= 0) {
 					chosen = i;
@@ -155,10 +193,9 @@ export class SnowballSpawner {
 				}
 			}
 			if (chosen < 0) break;
-			available[chosen] = false;
-			picked.push(chosen);
+			this._available[chosen] = false;
+			this._picked[this._pickedCount++] = chosen;
 		}
-		return picked;
 	}
 
 	private getBlockCount(gameState: GameStateManager): number {
@@ -229,82 +266,70 @@ export class SnowballSpawner {
 	 * Apply profile-specific parameters to snowball
 	 * Centralizes all profile configuration logic
 	 */
+	// Reusable params object — zero per-call allocation
+	private readonly _params = {
+		scale: 0,
+		speedMul: 1,
+		collisionRadiusMul: 1,
+		wobbleMul: 1,
+		hopMul: 1,
+		vortexAmp: 0,
+		vortexFreq: 0,
+		vortexPhase: 0,
+		fractureZ: -12,
+		adjustedX: 0
+	};
+
 	private applyProfileParams(
 		profile: SnowballProfile,
 		x: number,
 		playerX: number
-	): {
-		scale: number;
-		speedMul: number;
-		collisionRadiusMul: number;
-		wobbleMul: number;
-		hopMul: number;
-		vortexAmp: number;
-		vortexFreq: number;
-		vortexPhase: number;
-		fractureZ: number;
-		adjustedX: number;
-	} {
-		// Default values for STANDARD profile
-		let scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
-		let speedMul = 1.0;
-		let collisionRadiusMul = 1.0;
-		let wobbleMul = 1.0;
-		let hopMul = 1.0;
-		let vortexAmp = 0.0;
-		let vortexFreq = 0.0;
-		let vortexPhase = 0.0;
-		let fractureZ = -12.0;
-		let adjustedX = x;
+	): typeof this._params {
+		const p = this._params;
+		// Reset to STANDARD defaults
+		p.scale = this.MIN_SCALE + Math.random() * (this.MAX_SCALE - this.MIN_SCALE);
+		p.speedMul = 1.0;
+		p.collisionRadiusMul = 1.0;
+		p.wobbleMul = 1.0;
+		p.hopMul = 1.0;
+		p.vortexAmp = 0.0;
+		p.vortexFreq = 0.0;
+		p.vortexPhase = 0.0;
+		p.fractureZ = -12.0;
+		p.adjustedX = x;
 
 		if (profile === 'SEEKER') {
-			// Mid-sized, one-time homing adjustment toward player's current X
-			scale = this.SEEKER_SCALE_BASE + Math.random() * this.SEEKER_SCALE_VARIATION;
-			speedMul = this.SEEKER_SPEED_MUL;
-			adjustedX = this.clamp(
+			p.scale = this.SEEKER_SCALE_BASE + Math.random() * this.SEEKER_SCALE_VARIATION;
+			p.speedMul = this.SEEKER_SPEED_MUL;
+			p.adjustedX = this.clamp(
 				x + (playerX - x) * this.SEEKER_HOMING_STRENGTH,
 				this.PLAYABLE_WIDTH_MIN,
 				this.PLAYABLE_WIDTH_MAX
 			);
 		} else if (profile === 'FRACTURER') {
-			// Large + slow; splits into fragments near the player
-			scale = this.FRACTURER_SCALE_BASE + Math.random() * this.FRACTURER_SCALE_VARIATION;
-			speedMul = this.FRACTURER_SPEED_MUL;
-			wobbleMul = this.FRACTURER_WOBBLE_MUL;
-			hopMul = this.FRACTURER_HOP_MUL;
-			fractureZ = this.FRACTURER_Z_BASE - Math.random() * this.FRACTURER_Z_VARIATION;
+			p.scale = this.FRACTURER_SCALE_BASE + Math.random() * this.FRACTURER_SCALE_VARIATION;
+			p.speedMul = this.FRACTURER_SPEED_MUL;
+			p.wobbleMul = this.FRACTURER_WOBBLE_MUL;
+			p.hopMul = this.FRACTURER_HOP_MUL;
+			p.fractureZ = this.FRACTURER_Z_BASE - Math.random() * this.FRACTURER_Z_VARIATION;
 		} else if (profile === 'VORTEX') {
-			// Oscillating snowball with side-to-side sway
-			scale = this.VORTEX_SCALE_BASE + Math.random() * this.VORTEX_SCALE_VARIATION;
-			speedMul = this.VORTEX_SPEED_MUL;
-			vortexFreq = this.VORTEX_FREQ_BASE + Math.random() * this.VORTEX_FREQ_VARIATION;
-			vortexPhase = Math.random() * Math.PI * 2;
-			// Keep sway within playable bounds
+			p.scale = this.VORTEX_SCALE_BASE + Math.random() * this.VORTEX_SCALE_VARIATION;
+			p.speedMul = this.VORTEX_SPEED_MUL;
+			p.vortexFreq = this.VORTEX_FREQ_BASE + Math.random() * this.VORTEX_FREQ_VARIATION;
+			p.vortexPhase = Math.random() * Math.PI * 2;
 			const roomLeft = x - this.PLAYABLE_WIDTH_MIN;
 			const roomRight = this.PLAYABLE_WIDTH_MAX - x;
 			const room = Math.max(0.0, Math.min(roomLeft, roomRight) - this.VORTEX_AMP_MARGIN);
-			vortexAmp = Math.min(this.VORTEX_AMP_MAX, room);
+			p.vortexAmp = Math.min(this.VORTEX_AMP_MAX, room);
 		} else if (profile === 'HEAVY') {
-			// Massive slow boulder with large hitbox
-			scale = this.HEAVY_SCALE_BASE + Math.random() * this.HEAVY_SCALE_VARIATION;
-			speedMul = this.HEAVY_SPEED_MUL;
-			collisionRadiusMul = this.HEAVY_COLLISION_RADIUS_MUL;
-			wobbleMul = this.HEAVY_WOBBLE_MUL;
-			hopMul = this.HEAVY_HOP_MUL;
+			p.scale = this.HEAVY_SCALE_BASE + Math.random() * this.HEAVY_SCALE_VARIATION;
+			p.speedMul = this.HEAVY_SPEED_MUL;
+			p.collisionRadiusMul = this.HEAVY_COLLISION_RADIUS_MUL;
+			p.wobbleMul = this.HEAVY_WOBBLE_MUL;
+			p.hopMul = this.HEAVY_HOP_MUL;
 		}
 
-		return {
-			scale,
-			speedMul,
-			collisionRadiusMul,
-			wobbleMul,
-			hopMul,
-			vortexAmp,
-			vortexFreq,
-			vortexPhase,
-			fractureZ,
-			adjustedX
-		};
+		return p;
 	}
 
 	private spawnRow(gameState: GameStateManager, blockedMask: number, zBase: number) {
@@ -334,20 +359,26 @@ export class SnowballSpawner {
 
 			const rotationY = Math.random() * Math.PI * 2;
 			const geometryVariant = Math.floor(Math.random() * this.GEOMETRY_VARIANTS);
-			gameState.addSnowball(params.adjustedX, z, params.scale, rotationY, geometryVariant, {
-				profile,
-				baseX: params.adjustedX,
-				speedMul: params.speedMul,
-				collisionRadiusMul: params.collisionRadiusMul,
-				wobbleMul: params.wobbleMul,
-				hopMul: params.hopMul,
-				vortexAmp: params.vortexAmp,
-				vortexFreq: params.vortexFreq,
-				vortexPhase: params.vortexPhase,
-				fractureZ: params.fractureZ,
-				hasFractured: false,
-				seekerLocked: false
-			});
+			this._spawnOpts.profile = profile;
+			this._spawnOpts.baseX = params.adjustedX;
+			this._spawnOpts.speedMul = params.speedMul;
+			this._spawnOpts.collisionRadiusMul = params.collisionRadiusMul;
+			this._spawnOpts.wobbleMul = params.wobbleMul;
+			this._spawnOpts.hopMul = params.hopMul;
+			this._spawnOpts.vortexAmp = params.vortexAmp;
+			this._spawnOpts.vortexFreq = params.vortexFreq;
+			this._spawnOpts.vortexPhase = params.vortexPhase;
+			this._spawnOpts.fractureZ = params.fractureZ;
+			this._spawnOpts.hasFractured = false;
+			this._spawnOpts.seekerLocked = false;
+			gameState.addSnowball(
+				params.adjustedX,
+				z,
+				params.scale,
+				rotationY,
+				geometryVariant,
+				this._spawnOpts
+			);
 		}
 	}
 
@@ -371,9 +402,13 @@ export class SnowballSpawner {
 		if (Math.random() < staggerChance) {
 			// Pick two gap lanes, then block everything else (3 snowballs on 5 lanes).
 			// Ensure the gaps don't repeat the previous pattern too often.
-			const gapWeights = [1.0, 1.05, 0.85, 1.05, 1.0];
+			this._gapWeights[0] = 1.0;
+			this._gapWeights[1] = 1.05;
+			this._gapWeights[2] = 0.85;
+			this._gapWeights[3] = 1.05;
+			this._gapWeights[4] = 1.0;
 			// Slightly discourage leaving the player's current lane open.
-			gapWeights[playerLane] *= 0.7;
+			this._gapWeights[playerLane] *= 0.7;
 
 			// Exclude previous gaps (i.e., lanes that were open last time) with some probability.
 			let excludeGapMask = 0;
@@ -385,10 +420,13 @@ export class SnowballSpawner {
 				}
 			}
 
-			const gaps = this.pickWeightedUnique(gapWeights, 2, excludeGapMask);
+			this.pickWeightedUnique(this._gapWeights, 2, excludeGapMask);
+			// Build gap bitmask from picked results
+			let gapMask = 0;
+			for (let k = 0; k < this._pickedCount; k++) gapMask |= 1 << this._picked[k];
 			let blockedMask = 0;
 			for (let lane = 0; lane < this.LANE_COUNT; lane++) {
-				if (gaps.includes(lane)) continue;
+				if (gapMask & (1 << lane)) continue;
 				blockedMask |= 1 << lane;
 			}
 			// Safety: always leave at least 1 gap.
@@ -398,10 +436,14 @@ export class SnowballSpawner {
 
 			this.spawnRow(gameState, blockedMask, this.SPAWN_Z);
 			// Follow-up staggered row with different gaps (forces movement).
-			const shiftGaps = gaps.map((g) => (g + 1) % this.LANE_COUNT);
+			// Shift gap lanes by +1 without allocating a new array
+			let shiftGapMask = 0;
+			for (let k = 0; k < this._pickedCount; k++) {
+				shiftGapMask |= 1 << ((this._picked[k] + 1) % this.LANE_COUNT);
+			}
 			let blockedMask2 = 0;
 			for (let lane = 0; lane < this.LANE_COUNT; lane++) {
-				if (shiftGaps.includes(lane)) continue;
+				if (shiftGapMask & (1 << lane)) continue;
 				blockedMask2 |= 1 << lane;
 			}
 			if (blockedMask2 === (1 << this.LANE_COUNT) - 1) {
@@ -418,12 +460,14 @@ export class SnowballSpawner {
 		const blockCount = Math.min(blockCountRaw, this.LANE_COUNT - 1);
 
 		// Base weights: center lane equal or higher frequency than edges.
-		const baseWeights = [1.0, 1.15, 1.45, 1.15, 1.0];
-		const weights = new Array<number>(this.LANE_COUNT).fill(1);
+		// Reuse static arrays — zero per-spawn allocation
+		for (let i = 0; i < this.LANE_COUNT; i++) {
+			this._weights[i] = 1;
+		}
 		for (let i = 0; i < this.LANE_COUNT; i++) {
 			const sinceBlocked = gameState.timePlayed - gameState.spawnerLastBlockedTimes[i];
 			const heat = this.clamp(sinceBlocked / this.LANE_TARGET_TIMEOUT, 0, 2);
-			weights[i] = baseWeights[i] * (1 + heat * 1.15);
+			this._weights[i] = SnowballSpawner._baseWeights[i] * (1 + heat * 1.15);
 		}
 
 		// Force-include any lane that has been "too safe" for too long.
@@ -461,8 +505,8 @@ export class SnowballSpawner {
 			((forcedMask >> 3) & 1) +
 			((forcedMask >> 4) & 1);
 		const remaining = Math.max(0, blockCount - forcedCount);
-		const picked = this.pickWeightedUnique(weights, remaining, forcedMask);
-		for (const lane of picked) blockedMask |= 1 << lane;
+		this.pickWeightedUnique(this._weights, remaining, forcedMask);
+		for (let k = 0; k < this._pickedCount; k++) blockedMask |= 1 << this._picked[k];
 
 		// Safety: never block all lanes.
 		if (blockedMask === (1 << this.LANE_COUNT) - 1) {

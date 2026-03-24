@@ -2,11 +2,12 @@
   import { onDestroy } from 'svelte';
   import { T, useTask } from '@threlte/core';
   import { useGltf } from '@threlte/extras';
-  import { getGameState } from '$lib/game';
+  import { getGameState, getQualityContext } from '$lib/game';
   import * as THREE from 'three';
 
   // Dependency injection: retrieve game state from context
   const gameState = getGameState();
+  const { settings: Q } = getQualityContext();
 
   // Frost Phase visual state (reactive for template binding)
   let frostPhaseActive = $state(false);
@@ -241,7 +242,7 @@
   }
 
   // Frost Phase visual effect: icy shield aura
-  const frostShieldGeometry = new THREE.SphereGeometry(1.8, 24, 24);
+  const frostShieldGeometry = new THREE.SphereGeometry(1.8, Q.frostShieldSegments, Q.frostShieldSegments);
 
   function resolveSnowmanGltfUrl(): string {
     if (typeof window === 'undefined') {

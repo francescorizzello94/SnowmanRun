@@ -1,16 +1,17 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
   import { onDestroy } from 'svelte';
-  import { getGameState } from '$lib/game';
+  import { getGameState, getQualityContext } from '$lib/game';
   import * as THREE from 'three';
 
   const gameState = getGameState();
+  const { settings: Q } = getQualityContext();
 
   // World-space reference (must match SnowGround + Player grounding)
   const GROUND_Y = -0.01;
 
-  // Fixed-size particle buffer (no per-frame allocations)
-  const COUNT = 700;
+  // Quality-aware particle count
+  const COUNT = Q.snowSpurtCount;
 
   const positions = new Float32Array(COUNT * 3);
   const velocities = new Float32Array(COUNT * 3);
@@ -29,8 +30,8 @@
   const material = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    // Additive reads as airy powder; we keep alpha discipline below so it doesn't wash out.
-    blending: THREE.AdditiveBlending,
+    // Additive reads as airy powder on HIGH; NormalBlending on LOW to reduce fill cost.
+    blending: Q.snowSpurtAdditive ? THREE.AdditiveBlending : THREE.NormalBlending,
     uniforms: {
       uSize: { value: 28.0 },
     },
@@ -147,10 +148,12 @@
       // Gravity arc
       velocities[base + 1] -= GRAVITY * gravityMul[i] * delta;
 
-      // Air drag (powder slows quickly, slush a bit less)
+      // Air drag — linear approximation of exp(-d*delta) ≈ 1-d*delta
+      // Max error 0.2% for d*delta ∈ [0.019, 0.064]; eliminates 2×Math.exp per particle
       const d = drag[i];
-      const dragXZ = Math.exp(-d * delta);
-      const dragY = Math.exp(-(d * 0.55) * delta);
+      const dd = d * delta;
+      const dragXZ = 1 - dd;
+      const dragY = 1 - dd * 0.55;
       velocities[base + 0] *= dragXZ;
       velocities[base + 2] *= dragXZ;
       velocities[base + 1] *= dragY;

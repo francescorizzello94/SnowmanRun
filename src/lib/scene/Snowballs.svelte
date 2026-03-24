@@ -1,42 +1,32 @@
 <script lang="ts">
-  import { T, useTask, useThrelte } from '@threlte/core';
+  import { T, useTask } from '@threlte/core';
   import { onDestroy } from 'svelte';
-  import { getGameState } from '$lib/game';
+  import { getGameState, getQualityContext } from '$lib/game';
   import * as THREE from 'three';
   
-  // Dependency injection: retrieve game state from context
   const gameState = getGameState();
-  
-  // Access subsystems via game state orchestrator
+  const { settings: Q } = getQualityContext();
   const { difficulty, spawner, collision } = gameState;
   
-  // Get scene for raycasting
-  const { scene } = useThrelte();
-  
-  // === DEBUG MODE ===
-  // Set to true to see collision hitboxes
   const DEBUG_HITBOXES = false;
   
   // Tuning constants
-  const CLEANUP_Z = 1.5; // Remove snowballs IMMEDIATELY after passing player (was 15!)
-  const HIT_STOP_DURATION = 0.12; // 120ms freeze on collision
-  const GROUND_OFFSET = 0.02; // Small offset above ground
-  const WOBBLE_TILT = 0.06; // Small extra wobble tilt on top of pivot offset
-  const SKITTER_MAX_HOP = 0.07; // Vertical hop amplitude (scaled by snowball scale)
-  const FRACTURE_SPLIT_OFFSET = 0.8; // Base X separation for fragments
-  const FRAGMENT_SCALE_RATIO = 0.55; // Scale multiplier for fragment snowballs
+  const CLEANUP_Z = 1.5;
+  const HIT_STOP_DURATION = 0.12;
+  const GROUND_OFFSET = 0.02;
+  const WOBBLE_TILT = 0.06;
+  const SKITTER_MAX_HOP = 0.07;
+  const FRACTURE_SPLIT_OFFSET = 0.8;
+  const FRAGMENT_SCALE_RATIO = 0.55;
+  const MAX_SNOWBALLS = 100;
   
-  // Raycaster for ground detection
-  const raycaster = new THREE.Raycaster();
-  const rayOrigin = new THREE.Vector3();
-  const rayDirection = new THREE.Vector3(0, -1, 0);
-
-  // === PROFILE BADGES (UI cues) ===
-  // Goal: keep STANDARD snowballs plain; add lightweight, readable markers for elite profiles.
-  // Implemented as camera-facing sprites (billboarded) with tiny glyphs.
-  let badgesReady = $state(false);
+  // === PROFILE BADGES (imperative sprite pool) ===
+  const MAX_BADGES = 20;
   const badgeTextures: THREE.Texture[] = [];
   const badgeMaterials: Partial<Record<string, THREE.SpriteMaterial>> = {};
+  const badgeGroup = new THREE.Group();
+  badgeGroup.name = 'BadgeGroup';
+  const badgeSpritePool: THREE.Sprite[] = [];
 
   function createBadgeTexture(label: string, colorHex: string): THREE.Texture {
     const size = 64;
@@ -50,29 +40,21 @@
       fallback.needsUpdate = true;
       return fallback;
     }
-
     ctx.clearRect(0, 0, size, size);
-
-    // Soft dark backing for readability.
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, 26, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.fill();
-
-    // Colored ring.
     ctx.lineWidth = 6;
     ctx.strokeStyle = colorHex;
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, 23, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Center letter.
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 28px system-ui, -apple-system, Segoe UI, Arial';
     ctx.fillText(label, size / 2, size / 2 + 1);
-
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
@@ -80,41 +62,38 @@
   }
 
   function initBadges() {
-    if (typeof document === 'undefined') return;
-
+    if (typeof document === 'undefined' || !Q.badgeSprites) return;
     const defs: Array<[string, string, string]> = [
       ['SEEKER', 'S', '#ff6a3d'],
       ['FRACTURER', 'F', '#b07cff'],
       ['VORTEX', 'V', '#31d3ff'],
       ['HEAVY', 'H', '#ffd34d'],
     ];
-
     for (const [profile, label, color] of defs) {
       const tex = createBadgeTexture(label, color);
       badgeTextures.push(tex);
       badgeMaterials[profile] = new THREE.SpriteMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.95,
-        depthTest: false,
-        depthWrite: false,
+        map: tex, transparent: true, opacity: 0.95,
+        depthTest: false, depthWrite: false,
       });
     }
-
-    badgesReady = true;
+    for (let i = 0; i < MAX_BADGES; i++) {
+      const sprite = new THREE.Sprite();
+      sprite.visible = false;
+      sprite.renderOrder = 1000;
+      badgeGroup.add(sprite);
+      badgeSpritePool.push(sprite);
+    }
   }
-
   initBadges();
 
+  // === MATERIALS (quality-aware) ===
   function createSnowBumpTexture(size = 128): THREE.DataTexture {
     const data = new Uint8Array(size * size * 4);
     for (let i = 0; i < size * size; i++) {
       const v = 235 + Math.floor(Math.random() * 20);
       const idx = i * 4;
-      data[idx + 0] = v;
-      data[idx + 1] = v;
-      data[idx + 2] = v;
-      data[idx + 3] = 255;
+      data[idx] = v; data[idx + 1] = v; data[idx + 2] = v; data[idx + 3] = 255;
     }
     const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
     tex.wrapS = THREE.RepeatWrapping;
@@ -123,64 +102,43 @@
     tex.needsUpdate = true;
     return tex;
   }
-  
   const snowBump = createSnowBumpTexture(128);
 
-  // Crystalline PBR snow: bright white, high roughness, subtle pale-blue edge glow.
-  const snowMaterial = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#ffffff'),
-    roughness: 0.94,
-    metalness: 0.0,
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.55,
-    ior: 1.31,
-    reflectivity: 0.12,
-    bumpMap: snowBump,
-    bumpScale: 0.022,
-    envMapIntensity: 0.25,
-    emissive: new THREE.Color('#a9dcff'),
-    emissiveIntensity: 0.0,
-    flatShading: false,
-  });
+  function createSnowMaterial(): THREE.Material {
+    if (Q.physicalMaterial) {
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color('#ffffff'), roughness: 0.94, metalness: 0.0,
+        clearcoat: 0.18, clearcoatRoughness: 0.55, ior: 1.31, reflectivity: 0.12,
+        bumpMap: snowBump, bumpScale: 0.022, envMapIntensity: 0.25,
+        emissive: new THREE.Color('#a9dcff'), emissiveIntensity: 0.0, flatShading: false,
+      });
+      if (Q.fresnelShader) {
+        mat.onBeforeCompile = (shader) => {
+          shader.uniforms.uEdgeColor = { value: new THREE.Color('#a9dcff') };
+          shader.uniforms.uEdgePower = { value: 3.0 };
+          shader.uniforms.uEdgeIntensity = { value: 0.18 };
+          shader.fragmentShader = shader.fragmentShader
+            .replace('#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+               float edgeF = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), uEdgePower);
+               totalEmissiveRadiance += uEdgeColor * (edgeF * uEdgeIntensity);`)
+            .replace('uniform vec3 emissive;',
+              `uniform vec3 emissive;
+               uniform vec3 uEdgeColor;
+               uniform float uEdgePower;
+               uniform float uEdgeIntensity;`);
+        };
+      }
+      return mat;
+    }
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#ffffff'), roughness: 0.9, metalness: 0.0,
+      bumpMap: snowBump, bumpScale: 0.018, envMapIntensity: 0.2, flatShading: false,
+    });
+  }
+  const snowMaterial = createSnowMaterial();
 
-  // Fresnel-like emissive tint at edges to mimic soft subsurface scattering.
-  // Implemented via onBeforeCompile to keep MeshPhysicalMaterial lighting model.
-  snowMaterial.onBeforeCompile = (shader) => {
-    shader.uniforms.uEdgeColor = { value: new THREE.Color('#a9dcff') };
-    shader.uniforms.uEdgePower = { value: 3.0 };
-    shader.uniforms.uEdgeIntensity = { value: 0.18 };
-
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-         float edgeF = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), uEdgePower);
-         totalEmissiveRadiance += uEdgeColor * (edgeF * uEdgeIntensity);`
-      )
-      .replace(
-        'uniform vec3 emissive;',
-        `uniform vec3 emissive;
-         uniform vec3 uEdgeColor;
-         uniform float uEdgePower;
-         uniform float uEdgeIntensity;`
-      );
-  };
-
-  // Seeker visual tell: subtle red emissive glow.
-  const seekerMaterial = snowMaterial.clone();
-  seekerMaterial.emissive = new THREE.Color('#ff2b2b');
-  seekerMaterial.emissiveIntensity = 0.22;
-  seekerMaterial.needsUpdate = true;
-  
-  // Debug wireframe material
-  const debugMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.5,
-  });
-  
-  // Create geometry variants (lumpy spheres for hand-packed snow look)
+  // === GEOMETRY (quality-aware detail) ===
   const geometryVariants: THREE.BufferGeometry[] = [];
   const geometryBottomOffsets: number[] = [];
   const geometryRadii: number[] = [];
@@ -189,483 +147,295 @@
     const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
     return t * t * (3 - 2 * t);
   }
-
-  function fract(x: number): number {
-    return x - Math.floor(x);
-  }
-
-  function hash1(n: number): number {
-    return fract(Math.sin(n) * 43758.5453123);
-  }
-
+  function fract(x: number): number { return x - Math.floor(x); }
+  function hash1(n: number): number { return fract(Math.sin(n) * 43758.5453123); }
   function hash3(ix: number, iy: number, iz: number, seed: number): [number, number, number] {
     const n = ix * 127.1 + iy * 311.7 + iz * 74.7 + seed * 19.19;
-    const a = hash1(n);
-    const b = hash1(n + 13.13);
-    const c = hash1(n + 29.79);
-    return [a, b, c];
+    return [hash1(n), hash1(n + 13.13), hash1(n + 29.79)];
   }
 
   function applyVoronoiDisplacement(
-    geo: THREE.BufferGeometry,
-    seed: number,
-    frequency: number,
-    clumpAmp: number,
-    ridgeAmp: number
+    geo: THREE.BufferGeometry, seed: number, frequency: number, clumpAmp: number, ridgeAmp: number
   ) {
     const positions = geo.attributes.position as THREE.BufferAttribute;
-
     for (let i = 0; i < positions.count; i++) {
-      const x0 = positions.getX(i);
-      const y0 = positions.getY(i);
-      const z0 = positions.getZ(i);
-
-      // Use normalized direction so displacement is radial.
+      const x0 = positions.getX(i), y0 = positions.getY(i), z0 = positions.getZ(i);
       const len = Math.sqrt(x0 * x0 + y0 * y0 + z0 * z0) || 1;
-      const nx = x0 / len;
-      const ny = y0 / len;
-      const nz = z0 / len;
-
-      // Voronoi on a scaled space.
-      const px = nx * frequency;
-      const py = ny * frequency;
-      const pz = nz * frequency;
-
-      const cx = Math.floor(px);
-      const cy = Math.floor(py);
-      const cz = Math.floor(pz);
-
-      let d1 = Infinity;
-      let d2 = Infinity;
-
+      const nx = x0 / len, ny = y0 / len, nz = z0 / len;
+      const px = nx * frequency, py = ny * frequency, pz = nz * frequency;
+      const cx = Math.floor(px), cy = Math.floor(py), cz = Math.floor(pz);
+      let d1 = Infinity, d2 = Infinity;
       for (let ox = -1; ox <= 1; ox++) {
         for (let oy = -1; oy <= 1; oy++) {
           for (let oz = -1; oz <= 1; oz++) {
-            const ix = cx + ox;
-            const iy = cy + oy;
-            const iz = cz + oz;
-            const [rx, ry, rz] = hash3(ix, iy, iz, seed);
-
-            // Feature point inside cell.
-            const fx = ix + rx;
-            const fy = iy + ry;
-            const fz = iz + rz;
-
-            const dx = fx - px;
-            const dy = fy - py;
-            const dz = fz - pz;
-            const dist2 = dx * dx + dy * dy + dz * dz;
-
-            if (dist2 < d1) {
-              d2 = d1;
-              d1 = dist2;
-            } else if (dist2 < d2) {
-              d2 = dist2;
-            }
+            const iix = cx + ox, iiy = cy + oy, iiz = cz + oz;
+            const [rx, ry, rz] = hash3(iix, iiy, iiz, seed);
+            const ddx = iix + rx - px, ddy = iiy + ry - py, ddz = iiz + rz - pz;
+            const dist2 = ddx * ddx + ddy * ddy + ddz * ddz;
+            if (dist2 < d1) { d2 = d1; d1 = dist2; } else if (dist2 < d2) { d2 = dist2; }
           }
         }
       }
-
-      const dist1 = Math.sqrt(d1);
-      const dist2 = Math.sqrt(d2);
-
-      // Flattened clumps near cell centers.
+      const dist1 = Math.sqrt(d1), dist2v = Math.sqrt(d2);
       const clump = 1.0 - smoothstep(0.18, 0.44, dist1);
       const clumpRamp = smoothstep(0.15, 0.95, clump);
-
-      // Sharp ridges near boundaries (F2 - F1).
-      const ridge = Math.max(0, Math.min(1, (dist2 - dist1) * 3.4));
+      const ridge = Math.max(0, Math.min(1, (dist2v - dist1) * 3.4));
       const ridgeRamp = smoothstep(0.10, 0.55, ridge);
-
-      // Outward-only displacement (no inward dents).
       const disp = clumpRamp * clumpAmp + ridgeRamp * ridgeAmp;
-      const newLen = len * (1 + disp);
-      positions.setXYZ(i, nx * newLen, ny * newLen, nz * newLen);
+      positions.setXYZ(i, nx * len * (1 + disp), ny * len * (1 + disp), nz * len * (1 + disp));
     }
-
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
   }
   
   function createAvalancheGeometry(seed: number): THREE.BufferGeometry {
-    // Procedural Icosphere generation (detail level 4)
-    const geo = new THREE.IcosahedronGeometry(0.6, 4);
-
-    // Voronoi displacement + smoothstep ramps to form clumps and ridges.
+    const geo = new THREE.IcosahedronGeometry(0.6, Q.snowballDetail);
     applyVoronoiDisplacement(geo, seed, 3.25, 0.06, 0.095);
-
-    // Cache bottom offset (for perfect ground anchoring) and radius (for roll sync).
     const pos = geo.attributes.position as THREE.BufferAttribute;
     let minY = Infinity;
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      if (y < minY) minY = y;
-    }
-
-    const bottom = -minY; // distance from origin to bottom-most vertex
-    geometryBottomOffsets.push(bottom);
-
-    const r = geo.boundingSphere?.radius ?? 0.6;
-    geometryRadii.push(r);
+    for (let i = 0; i < pos.count; i++) { if (pos.getY(i) < minY) minY = pos.getY(i); }
+    geometryBottomOffsets.push(-minY);
+    geometryRadii.push(geo.boundingSphere?.radius ?? 0.6);
     return geo;
   }
-
   geometryVariants.push(createAvalancheGeometry(1.0));
   geometryVariants.push(createAvalancheGeometry(2.3));
   geometryVariants.push(createAvalancheGeometry(4.7));
   
-  // Debug geometry for collision visualization
-  const debugSphereGeo = new THREE.SphereGeometry(1, 12, 12);
-  
+  // === INSTANCED MESHES — 3 draw calls for ALL snowballs ===
+  const instancedMeshes: THREE.InstancedMesh[] = [];
+  for (let v = 0; v < 3; v++) {
+    const im = new THREE.InstancedMesh(geometryVariants[v], snowMaterial, MAX_SNOWBALLS);
+    im.count = 0;
+    im.frustumCulled = false;
+    im.castShadow = Q.snowballShadows;
+    im.receiveShadow = false;
+    instancedMeshes.push(im);
+  }
+
+  // Reusable temporaries (zero per-frame alloc)
+  const _euler = new THREE.Euler();
+  const _quat = new THREE.Quaternion();
+  const _pos = new THREE.Vector3();
+  const _scl = new THREE.Vector3();
+  const _mat = new THREE.Matrix4();
+  const _innerPos = new THREE.Vector3();
+  const _innerScl = new THREE.Vector3();
+  const _innerMat = new THREE.Matrix4();
+  const _identityQuat = new THREE.Quaternion();
+  const _counts = [0, 0, 0];
+  const _fragParamsLeft = {
+    profile: 'FRAGMENT' as const, speedMul: 1.35, collisionRadiusMul: 0.95,
+    wobbleMul: 1.15, hopMul: 1.05, baseX: 0, parentFracturerId: 0,
+  };
+  const _fragParamsRight = {
+    profile: 'FRAGMENT' as const, speedMul: 1.35, collisionRadiusMul: 0.95,
+    wobbleMul: 1.15, hopMul: 1.05, baseX: 0, parentFracturerId: 0,
+  };
+
+  const debugMaterial = DEBUG_HITBOXES ? new THREE.MeshBasicMaterial({
+    color: 0xff0000, wireframe: true, transparent: true, opacity: 0.5,
+  }) : null;
+  const debugSphereGeo = DEBUG_HITBOXES ? new THREE.SphereGeometry(1, 12, 12) : null;
+
   let hitStopTimer = 0;
-  let groundMesh: THREE.Mesh | null = null;
 
-  // Render invalidation tick (keeps non-reactive snowball array in sync with template)
-  let renderTick = $state(0);
-  let renderAcc = 0;
-  const RENDER_HZ = 30;
-  
-  function findGroundMesh() {
-    if (groundMesh) return;
-    scene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh && obj.name === 'SnowGround') {
-        groundMesh = obj;
-      }
-    });
-
-    // Fallback for safety if name wasn't set for some reason
-    if (!groundMesh) {
-      scene.traverse((obj) => {
-        if (
-          obj instanceof THREE.Mesh &&
-          Math.abs(obj.rotation.x + Math.PI / 2) < 0.01 &&
-          obj.position.y < 0.1
-        ) {
-          groundMesh = obj;
-        }
-      });
-    }
-  }
-  
-  function getGroundHeight(x: number, z: number): number {
-    const DEFAULT_HEIGHT = 0;
-    if (!groundMesh) return DEFAULT_HEIGHT;
-    
-    rayOrigin.set(x, 10, z);
-    raycaster.set(rayOrigin, rayDirection);
-    
-    const intersects = raycaster.intersectObject(groundMesh, false);
-    if (intersects.length > 0) {
-      return intersects[0].point.y;
-    }
-    return DEFAULT_HEIGHT;
-  }
-  
-  /**
-   * Main game loop - SYNCHRONIZED collision detection
-   * Collision check happens IMMEDIATELY after position update, same frame
-   */
   const { stop } = useTask((delta) => {
-    if (gameState.state !== 'PLAYING') return;
-    
-    findGroundMesh();
-    
-    // Handle hit-stop
-    if (hitStopTimer > 0) {
-      hitStopTimer -= delta;
-      if (hitStopTimer <= 0) {
-        gameState.endGame();
-      }
+    if (gameState.state !== 'PLAYING') {
+      for (let v = 0; v < 3; v++) instancedMeshes[v].count = 0;
       return;
     }
     
-    // Update time and distance (dash can temporarily increase forward speed)
+    if (hitStopTimer > 0) {
+      hitStopTimer -= delta;
+      if (hitStopTimer <= 0) gameState.endGame();
+      return;
+    }
+    
     gameState.timePlayed += delta;
     const forwardSpeed = gameState.getForwardSpeed(gameState.timePlayed);
     gameState.distanceTraveled += delta * forwardSpeed;
-
-    // Trigger periodic template updates for snowball list + positions
-    renderAcc += delta;
-    if (renderAcc >= 1 / RENDER_HZ) {
-      renderAcc = 0;
-      // Incrementing renderTick is the sole invalidation signal for the template.
-      // The pool array reference never changes, so we rely on this reactive
-      // counter to force Svelte to re-read the raw slot properties.
-      renderTick = (renderTick + 1) % 1000000;
-    }
-
-    // Update dash state (auto-triggered by distance milestones)
     gameState.updateDashState(gameState.timePlayed, gameState.distanceTraveled);
 
-    // Milestone triggers (non-blocking)
-    // Distance: every 100m
     const distMilestone = Math.floor(gameState.distanceTraveled / 100) * 100;
     if (distMilestone >= 100 && distMilestone > gameState.lastDistanceMilestone) {
       gameState.lastDistanceMilestone = distMilestone;
       gameState.queueMilestone(`${distMilestone}M REACHED!`);
     }
-
-    // Rank-Based Progression: check for rank-ups and award Frost Phase charges
     gameState.checkRankProgression();
-
-    // Advance queued milestone messages
     gameState.tickMilestones();
     
-    // Spawn new snowballs
     if (spawner.shouldSpawn(gameState)) {
       spawner.spawn(gameState);
       gameState.lastSpawnTime = gameState.timePlayed;
     }
     
-    // Get current player position for collision (captured once per frame)
     const playerX = gameState.playerX;
     const playerZ = gameState.playerZ;
-    
     const dashSpeedMul = gameState.getDashSpeedMultiplier(gameState.timePlayed);
-    const speed =
-      difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset) * dashSpeedMul;
+    const speed = difficulty.getSnowballSpeed(gameState.timePlayed, gameState.difficultyPreset) * dashSpeedMul;
     const snowballs = gameState.snowballs;
-
-    // Seeker predictive intercept tuning
-    const SEEKER_LOCK_Z = -15; // lock when within 15 units of player on Z
+    const SEEKER_LOCK_Z = -15;
     const seekerLockZ = playerZ + SEEKER_LOCK_Z;
     const SEEKER_LEAD_MIN = 0.35;
     const SEEKER_LEAD_MAX = 0.95;
-    const SEEKER_TURN_RATE = 3.6; // per-second responsiveness
+    const SEEKER_TURN_RATE = 3.6;
+    const seekerAlpha = 1 - Math.exp(-SEEKER_TURN_RATE * delta);
     
-    // Process snowballs: update position -> check collision -> cleanup
-    // All in same frame, same loop iteration for each snowball
+    _counts[0] = 0; _counts[1] = 0; _counts[2] = 0;
+    let badgeIdx = 0;
+    
     for (let i = snowballs.length - 1; i >= 0; i--) {
       const snowball = snowballs[i];
       if (!snowball.active) continue;
       
-      // 1. UPDATE POSITION
       const snowballSpeed = speed * (snowball.speedMul ?? 1.0);
-      const distanceTraveled = snowballSpeed * delta;
-      snowball.z += distanceTraveled;
+      const distTraveled = snowballSpeed * delta;
+      snowball.z += distTraveled;
 
-      // Profile motion: Vortex sways horizontally (affects collision and ground sampling)
       if (snowball.profile === 'VORTEX') {
         snowball.x = snowball.baseX + Math.sin(gameState.timePlayed * snowball.vortexFreq + snowball.vortexPhase) * snowball.vortexAmp;
       } else if (snowball.profile === 'SEEKER') {
-        /**
-         * SEEKER PREDICTIVE INTERCEPT AI
-         * 
-         * Strategy: Calculate where the player WILL BE when the seeker reaches
-         * the interception point (z=0), then smoothly steer toward that position.
-         * 
-         * Path Lock Mechanic: Once the seeker crosses SEEKER_LOCK_Z (-15 units),
-         * it commits to its current heading. This creates a tactical window:
-         * - Early game: Bait the seeker by moving in one direction
-         * - Late dodge: Reverse direction after lock to exploit commitment
-         * 
-         * Mathematical Model:
-         * 1. Time-to-intercept: tToPlayer = distance / speed
-         * 2. Lead time: Apply min/max clamps to prevent over-prediction
-         * 3. Predicted target: playerX + playerVelocityX × leadTime
-         * 4. Exponential smoothing: α = 1 - e^(-TURN_RATE × Δt)
-         *    - Prevents instant snapping (looks robotic)
-         *    - Creates natural "steering" behavior
-         * 5. Path lock: Freeze baseX when crossing lock threshold
-         * 
-         * Visual Tell: Red emissive material + yaw jitter applied below
-         */
-        const locked = snowball.seekerLocked === true;
-        if (!locked && snowball.z >= seekerLockZ) {
-          snowball.seekerLocked = true; // Commit to current heading
-        }
-
+        if (snowball.seekerLocked !== true && snowball.z >= seekerLockZ) snowball.seekerLocked = true;
         if (snowball.seekerLocked !== true) {
-          // Calculate intercept point with velocity lead
           const toPlayer = Math.max(0.001, playerZ - snowball.z);
           const tToPlayer = toPlayer / Math.max(0.001, snowballSpeed);
           const leadT = Math.max(SEEKER_LEAD_MIN, Math.min(SEEKER_LEAD_MAX, tToPlayer));
           const predictedX = Math.max(-7, Math.min(7, playerX + gameState.playerVelocityX * leadT));
-
-          // Exponential smoothing for natural steering (prevents robotic snap-turns)
-          const a = 1 - Math.exp(-SEEKER_TURN_RATE * delta);
-          snowball.baseX = snowball.baseX + (predictedX - snowball.baseX) * a;
+          snowball.baseX += (predictedX - snowball.baseX) * seekerAlpha;
         }
-
         snowball.x = snowball.baseX;
       } else {
         snowball.x = snowball.baseX;
       }
 
-      // Profile behavior: Fracturer splits into two faster fragments near the player.
+      // Fracturer split
       if (snowball.profile === 'FRACTURER' && !snowball.hasFractured && snowball.z >= snowball.fractureZ) {
         snowball.hasFractured = true;
-
-        // Capture parent fields BEFORE deactivation resets the slot
         const parentFracturerId = snowball.id;
         const splitZ = snowball.z;
         const baseX = snowball.baseX;
         const parentScale = snowball.scale;
-        const parentGeometryVariant = snowball.geometryVariant;
+        const parentGeoVariant = snowball.geometryVariant;
         const fragScale = Math.max(FRAGMENT_SCALE_RATIO, parentScale * FRAGMENT_SCALE_RATIO);
         const offset = (FRACTURE_SPLIT_OFFSET + Math.random() * 0.25) * parentScale;
-
-        // Deactivate parent (resets all fields — reads above are safe)
         gameState.deactivateSnowballDirect(snowball);
-
-        // Common parameters for fracture fragments
-        const fragmentParams = {
-          profile: 'FRAGMENT' as const,
-          speedMul: 1.35,
-          collisionRadiusMul: 0.95,
-          wobbleMul: 1.15,
-          hopMul: 1.05,
-        };
-
-        // Spawn two fragments, slightly diverging
-        const leftX = Math.max(-7, Math.min(7, baseX - offset));
-        const rightX = Math.max(-7, Math.min(7, baseX + offset));
-
-        const leftFrag = gameState.addSnowball(leftX, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeometryVariant, {
-          ...fragmentParams,
-          baseX: leftX,
-          parentFracturerId,
-        });
-        const rightFrag = gameState.addSnowball(rightX, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeometryVariant, {
-          ...fragmentParams,
-          baseX: rightX,
-          parentFracturerId,
-        });
-
-        // Track encounter only for fragments that actually spawned
-        const spawnedCount = (leftFrag ? 1 : 0) + (rightFrag ? 1 : 0);
-        if (spawnedCount > 0) {
-          gameState.registerFracturerSplit(parentFracturerId, spawnedCount);
-        }
+        const lx = Math.max(-7, Math.min(7, baseX - offset));
+        const rx = Math.max(-7, Math.min(7, baseX + offset));
+        _fragParamsLeft.baseX = lx; _fragParamsLeft.parentFracturerId = parentFracturerId;
+        _fragParamsRight.baseX = rx; _fragParamsRight.parentFracturerId = parentFracturerId;
+        const lf = gameState.addSnowball(lx, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeoVariant, _fragParamsLeft);
+        const rf = gameState.addSnowball(rx, splitZ, fragScale, Math.random() * Math.PI * 2, parentGeoVariant, _fragParamsRight);
+        const sc = (lf ? 1 : 0) + (rf ? 1 : 0);
+        if (sc > 0) gameState.registerFracturerSplit(parentFracturerId, sc);
         continue;
       }
       
-      // Ground anchoring: bottom edge touches the lane surface regardless of scale.
+      // Ground anchoring — O(1) analytical lookup (replaces per-frame raycasting)
       const variant = snowball.geometryVariant;
       const bottom = (geometryBottomOffsets[variant] ?? 0.6) * snowball.scale;
-      const groundHeight = getGroundHeight(snowball.x, snowball.z);
-
-      // Skitter motion: tiny vertical hops (always positive) as it travels.
+      const groundHeight = gameState.getGroundHeight(snowball.x, snowball.z);
       const hopWave = Math.sin(gameState.timePlayed * snowball.hopFreq + snowball.hopPhase);
-      const hop =
-        Math.pow(Math.max(0, hopWave), 6) *
-        SKITTER_MAX_HOP *
-        snowball.scale *
-        (snowball.hopMul ?? 1.0);
-
+      const hc = Math.max(0, hopWave); const hc3 = hc * hc * hc;
+      const hop = hc3 * hc3 * SKITTER_MAX_HOP * snowball.scale * (snowball.hopMul ?? 1.0);
       snowball.groundY = groundHeight + bottom + GROUND_OFFSET + hop;
       
-      // Synchronized rotation: ΔAngle = ΔDistance / Radius
-      const radius = (geometryRadii[variant] ?? 0.6) * snowball.scale;
-      const rollDelta = distanceTraveled / Math.max(0.0001, radius);
-      snowball.rollAngle += rollDelta;
-      
-      // 2. IMMEDIATE CLEANUP - Remove if past player (prevents ghost collisions)
-      // This happens BEFORE collision check for balls that have passed
-      if (snowball.z > playerZ + CLEANUP_Z) {
-  		if (snowball.profile === 'FRAGMENT' && snowball.parentFracturerId !== undefined) {
-  			gameState.recordFracturerFragmentPassed(snowball.parentFracturerId);
-  		} else {
-  			gameState.recordDodge(snowball.profile);
-  		}
-        gameState.deactivateSnowballDirect(snowball);
-        continue; // Skip collision check for removed snowball
+      const r = (geometryRadii[variant] ?? 0.6) * snowball.scale;
+      snowball.rollAngle += distTraveled / Math.max(0.0001, r);
+
+      // Write instance matrix (group transform × inner wobble+scale)
+      const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1);
+      _euler.set(snowball.rollAngle, snowball.rotationY, wobbleTilt);
+      _quat.setFromEuler(_euler);
+      _pos.set(snowball.x, snowball.groundY, snowball.z);
+      _scl.set(1, 1, 1);
+      _mat.compose(_pos, _quat, _scl);
+      _innerPos.set(
+        snowball.wobbleOffsetX * snowball.scale * (snowball.wobbleMul ?? 1), 0,
+        snowball.wobbleOffsetZ * snowball.scale * (snowball.wobbleMul ?? 1)
+      );
+      _innerScl.set(snowball.scale, snowball.scale, snowball.scale);
+      _innerMat.compose(_innerPos, _identityQuat, _innerScl);
+      _mat.multiply(_innerMat);
+      const idx = _counts[variant]++;
+      instancedMeshes[variant].setMatrixAt(idx, _mat);
+
+      // Badge sprites
+      if (Q.badgeSprites && badgeIdx < MAX_BADGES && snowball.profile !== 'STANDARD' && snowball.profile !== 'FRAGMENT') {
+        const bm = badgeMaterials[snowball.profile];
+        if (bm) {
+          const sp = badgeSpritePool[badgeIdx++];
+          sp.visible = true;
+          sp.material = bm;
+          const br = (geometryRadii[variant] ?? 0.6) * snowball.scale;
+          const bl = (snowball.profile === 'HEAVY' ? 0.85 : 0.6) * snowball.scale;
+          const bs = (snowball.profile === 'HEAVY' ? 1.15 : 0.9) * snowball.scale;
+          sp.position.set(snowball.x, snowball.groundY + br + bl, snowball.z);
+          sp.scale.set(bs, bs, bs);
+        }
       }
       
-      // 3. SYNCHRONOUS COLLISION CHECK - Only for snowballs in front of or at player
-      // Check collision only when snowball is in the danger zone (relative to player Z)
+      // Cleanup past player
+      if (snowball.z > playerZ + CLEANUP_Z) {
+        if (snowball.profile === 'FRAGMENT' && snowball.parentFracturerId !== undefined) {
+          gameState.recordFracturerFragmentPassed(snowball.parentFracturerId);
+        } else {
+          gameState.recordDodge(snowball.profile);
+        }
+        gameState.deactivateSnowballDirect(snowball);
+        continue;
+      }
+      
+      // Collision
       if (snowball.z >= playerZ - 1.5 && snowball.z <= playerZ + CLEANUP_Z) {
         const now = gameState.timePlayed;
-
-        // Dash: Complete invulnerability - snowman charges through obstacles
-        // The whole point of dash is to phase through snowballs
-        if (gameState.isDashActive(now)) {
-          continue;
-        }
-
-        // Frost Phase: Complete invulnerability against ALL snowballs (including Heavies)
-        // This is the reward for rank progression - stronger than jump
-        if (gameState.isFrostPhaseActive(now)) {
-          continue;
-        }
-
-        const jumpingNow = now >= gameState.jumpInvulnStartTime && now < gameState.jumpInvulnEndTime;
-        // Jump disables collision for standard-sized snowballs, but NOT for "Heavies".
-        // Collision is X/Z only, so the jump must be handled as a gameplay gate here.
-        if (jumpingNow && snowball.profile !== 'HEAVY') {
-          continue;
-        }
-
-        if (collision.checkCollision(
-          playerX,
-          playerZ,
-          snowball.x,
-          snowball.z,
-          snowball.scale,
-          snowball.collisionRadiusMul ?? 1.0
-        )) {
+        if (gameState.isDashActive(now)) continue;
+        if (gameState.isFrostPhaseActive(now)) continue;
+        const jumping = now >= gameState.jumpInvulnStartTime && now < gameState.jumpInvulnEndTime;
+        if (jumping && snowball.profile !== 'HEAVY') continue;
+        if (collision.checkCollision(playerX, playerZ, snowball.x, snowball.z, snowball.scale, snowball.collisionRadiusMul ?? 1.0)) {
           hitStopTimer = HIT_STOP_DURATION;
-          return; // Exit immediately on collision
+          return;
         }
       }
     }
+
+    // Commit instance counts
+    for (let v = 0; v < 3; v++) {
+      instancedMeshes[v].count = _counts[v];
+      if (_counts[v] > 0) instancedMeshes[v].instanceMatrix.needsUpdate = true;
+    }
+    // Hide unused badges
+    for (let b = badgeIdx; b < badgeSpritePool.length; b++) badgeSpritePool[b].visible = false;
   });
   
   onDestroy(() => {
     stop();
+    badgeGroup.clear();
+    instancedMeshes.forEach(im => im.dispose());
     geometryVariants.forEach(geo => geo.dispose());
     snowBump.dispose();
     snowMaterial.dispose();
-    seekerMaterial.dispose();
-    debugMaterial.dispose();
-    debugSphereGeo.dispose();
-    badgeTextures.forEach((t) => t.dispose());
-    Object.values(badgeMaterials).forEach((m) => m?.dispose());
+    if (debugMaterial) debugMaterial.dispose();
+    if (debugSphereGeo) debugSphereGeo.dispose();
+    badgeTextures.forEach(t => t.dispose());
+    Object.values(badgeMaterials).forEach(m => m?.dispose());
   });
 </script>
 
-<!-- Snowball visuals: renderTick drives re-evaluation of the fixed pool -->
-{#key renderTick}
-{#each gameState.snowballs as snowball, index (index)}
-  {#if snowball.active}
-    {@const wobbleTilt = Math.sin(snowball.rollAngle * 0.75 + snowball.hopPhase) * WOBBLE_TILT * (snowball.wobbleMul ?? 1)}
-    <!-- Organic wobble: pivot offset via Group+Mesh offset -->
-    <T.Group
-      position={[snowball.x, snowball.groundY, snowball.z]}
-      rotation={[snowball.rollAngle, snowball.rotationY, wobbleTilt]}
-    >
+<!-- 3 InstancedMesh draw calls for ALL snowballs (was 100 individual meshes) -->
+{#each instancedMeshes as im}
+  <T is={im} />
+{/each}
+
+<!-- Imperative badge sprite group -->
+<T is={badgeGroup} />
+
+<!-- Debug hitboxes (dev only) -->
+{#if DEBUG_HITBOXES && debugSphereGeo && debugMaterial}
+  {#each gameState.snowballs as snowball}
+    {#if snowball.active}
       <T.Mesh
-        position={[snowball.wobbleOffsetX * snowball.scale * (snowball.wobbleMul ?? 1), 0, snowball.wobbleOffsetZ * snowball.scale * (snowball.wobbleMul ?? 1)]}
-        scale={[snowball.scale, snowball.scale, snowball.scale]}
-        castShadow
-        receiveShadow
-      >
-        <T is={geometryVariants[snowball.geometryVariant]} />
-        <T is={snowMaterial} />
-      </T.Mesh>
-    </T.Group>
-
-    {#if badgesReady && snowball.profile !== 'STANDARD' && snowball.profile !== 'FRAGMENT'}
-      {@const badgeMat = badgeMaterials[snowball.profile]}
-      {@const badgeR = (geometryRadii[snowball.geometryVariant] ?? 0.6) * snowball.scale}
-      {@const badgeLift = (snowball.profile === 'HEAVY' ? 0.85 : 0.6) * snowball.scale}
-      {@const badgeSize = (snowball.profile === 'HEAVY' ? 1.15 : 0.9) * snowball.scale}
-
-      {#if badgeMat}
-        <!-- UI badge: camera-facing sprite above the snowball (does not roll). -->
-        <T.Sprite
-          position={[snowball.x, snowball.groundY + badgeR + badgeLift, snowball.z]}
-          scale={[badgeSize, badgeSize, badgeSize]}
-          renderOrder={1000}
-        >
-          <T is={badgeMat} />
-        </T.Sprite>
-      {/if}
-    {/if}
-    
-    <!-- Debug hitbox visualization -->
-    {#if DEBUG_HITBOXES}
-      <T.Mesh 
         position={[snowball.x, snowball.groundY, snowball.z]}
         scale={[collision.SNOWBALL_RADIUS * snowball.scale, collision.SNOWBALL_RADIUS * snowball.scale, collision.SNOWBALL_RADIUS * snowball.scale]}
       >
@@ -673,12 +443,7 @@
         <T is={debugMaterial} />
       </T.Mesh>
     {/if}
-  {/if}
-{/each}
-{/key}
-
-<!-- Player hitbox debug visualization -->
-{#if DEBUG_HITBOXES}
+  {/each}
   <T.Mesh position={[gameState.playerX, 1.0, 0]}>
     <T.SphereGeometry args={[collision.SNOWMAN_RADIUS, 12, 12]} />
     <T is={debugMaterial} />

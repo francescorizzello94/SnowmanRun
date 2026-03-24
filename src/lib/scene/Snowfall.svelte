@@ -1,13 +1,14 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
-  import { getGameState } from '$lib/game';
+  import { getGameState, getQualityContext } from '$lib/game';
   import { onDestroy } from 'svelte';
   import * as THREE from 'three';
 
   const gameState = getGameState();
+  const { settings: Q } = getQualityContext();
 
-  // Fixed-size particle buffer (no per-frame allocations)
-  const COUNT = 1400;
+  // Quality-aware particle count
+  const COUNT = Q.snowfallCount;
   const AREA_WIDTH = 26;
   const AREA_DEPTH = 70;
   const AREA_HEIGHT = 18;

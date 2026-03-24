@@ -11,7 +11,6 @@
  */
 
 import { getContext, setContext } from 'svelte';
-import { SvelteMap } from 'svelte/reactivity';
 import { DifficultyManager, type DifficultyPreset } from './difficulty.svelte';
 import { SnowballSpawner } from './spawner.svelte';
 import { CollisionDetector } from './collision.svelte';
@@ -206,7 +205,7 @@ export class GameStateManager {
 	// Fracturer encounter bookkeeping (non-reactive)
 	// FRACTURER parents are removed when they split, so we count them as "dodged"
 	// only if all resulting fragments pass the player without collision.
-	fracturerEncounters: SvelteMap<number, number> = new SvelteMap();
+	fracturerEncounters: Map<number, number> = new Map();
 
 	// Timing state - non-reactive for performance
 	lastSpawnTime: number = 0;
@@ -294,7 +293,7 @@ export class GameStateManager {
 		this.nextSnowballId = 1;
 		this.nextSnowballPoolIndex = 0;
 		this.hasLoggedSnowballPoolExhaustion = false;
-		this.fracturerEncounters = new SvelteMap();
+		this.fracturerEncounters = new Map();
 		this.lastSpawnTime = 0;
 		this.lastLaneIndex = -1;
 		this.sameLaneCount = 0;
@@ -673,19 +672,6 @@ export class GameStateManager {
 	}
 
 	/**
-	 * Deactivate a snowball slot by id without mutating pool structure.
-	 */
-	removeSnowball(id: number) {
-		for (let i = 0; i < this.snowballs.length; i += 1) {
-			const snowball = this.snowballs[i];
-			if (snowball.active && snowball.id === id) {
-				this.resetSnowballSlot(snowball);
-				return;
-			}
-		}
-	}
-
-	/**
 	 * Update snowball position directly (O(1) via reference)
 	 * This is called every frame, so we maintain direct reference
 	 */
@@ -698,6 +684,22 @@ export class GameStateManager {
 	 */
 	deactivateSnowballDirect(snowball: Snowball) {
 		this.resetSnowballSlot(snowball);
+	}
+
+	// ── Analytical ground height lookup ─────────────────────────────
+	// Registered by SnowGround, consumed by Snowballs to avoid per-frame raycasting.
+	private heightLookup: ((x: number, z: number) => number) | null = null;
+
+	registerHeightLookup(fn: (x: number, z: number) => number) {
+		this.heightLookup = fn;
+	}
+
+	unregisterHeightLookup() {
+		this.heightLookup = null;
+	}
+
+	getGroundHeight(x: number, z: number): number {
+		return this.heightLookup ? this.heightLookup(x, z) : 0;
 	}
 }
 

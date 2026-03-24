@@ -16,60 +16,36 @@ export class DifficultyManager {
 
 	/**
 	 * Returns difficulty-specific bounds for spawn interval and speed scaling
-	 * 
+	 *
 	 * Design Principle: "Anchored Presets" — each difficulty maintains its identity
 	 * throughout the session. EASY never escalates into HARD territory, preventing
 	 * frustration from unexpected difficulty spikes.
-	 * 
+	 *
 	 * Implementation: Each preset has independent initial and target values. The
 	 * curve is applied via linear interpolation over DIFFICULTY_RAMP_TIME (60s).
-	 * 
+	 *
 	 * Tuning Notes:
 	 * - Spawn intervals: Lower = more frequent obstacles
 	 * - Speed ranges: Higher = faster-moving obstacles
 	 * - EASY caps at 14.5 speed while INSANE reaches 28.5 (nearly 2× faster)
 	 * - EASY min spawn interval (0.95s) is slower than HARD initial (1.25s)
-	 * 
+	 *
 	 * @param preset - The difficulty level (EASY/NORMAL/HARD/INSANE)
 	 * @returns Bounds object with spawn and speed ranges
 	 */
-	private presetCurve(preset: DifficultyPreset): {
-		spawnInitial: number;
-		spawnMin: number;
-		speedInitial: number;
-		speedMax: number;
-	} {
-		switch (preset) {
-			case 'EASY':
-				return {
-					spawnInitial: 1.7,
-					spawnMin: 0.95,
-					speedInitial: 7.5,
-					speedMax: 14.5
-				};
-			case 'HARD':
-				return {
-					spawnInitial: 1.25,
-					spawnMin: 0.55,
-					speedInitial: 8.5,
-					speedMax: 23.5
-				};
-			case 'INSANE':
-				return {
-					spawnInitial: 1.05,
-					spawnMin: 0.45,
-					speedInitial: 9.0,
-					speedMax: 28.5
-				};
-			case 'NORMAL':
-			default:
-				return {
-					spawnInitial: 1.5,
-					spawnMin: 0.7,
-					speedInitial: 8.0,
-					speedMax: 19.5
-				};
-		}
+	// Static preset records — zero per-call allocation (returned by reference)
+	private static readonly PRESETS: Record<
+		DifficultyPreset,
+		{ spawnInitial: number; spawnMin: number; speedInitial: number; speedMax: number }
+	> = {
+		EASY: { spawnInitial: 1.7, spawnMin: 0.95, speedInitial: 7.5, speedMax: 14.5 },
+		NORMAL: { spawnInitial: 1.5, spawnMin: 0.7, speedInitial: 8.0, speedMax: 19.5 },
+		HARD: { spawnInitial: 1.25, spawnMin: 0.55, speedInitial: 8.5, speedMax: 23.5 },
+		INSANE: { spawnInitial: 1.05, spawnMin: 0.45, speedInitial: 9.0, speedMax: 28.5 }
+	};
+
+	private presetCurve(preset: DifficultyPreset) {
+		return DifficultyManager.PRESETS[preset];
 	}
 
 	getSpawnInterval(timePlayed: number, preset: DifficultyPreset = 'NORMAL'): number {
