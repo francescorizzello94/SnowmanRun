@@ -12,6 +12,8 @@
 		"test:itch:runtime": "node scripts/test-itch-runtime.mjs",
 		"zip:itch": "node scripts/zip-itch.mjs",
 		"itch": "npm run build:itch && npm run test:itch && npm run test:itch:runtime && npm run zip:itch",
+		"deploy": "npm run build:itch && npm run test:itch && npm run test:itch:runtime && butler push build/ pndgames/snowmanrun:web",
+		"deploy:status": "butler status pndgames/snowmanrun:web",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
