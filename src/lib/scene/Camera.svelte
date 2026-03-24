@@ -14,22 +14,22 @@
   const cameraRoll = new Spring(0, { stiffness: 0.12, damping: 0.7 });
   
   let cameraRef = $state<any>();
+
+  // Reusable Spring target objects — zero per-frame allocation
+  const _camTarget = { x: 0, y: 5, z: 10 };
+  const _lookTarget = { x: 0, y: 1, z: -4 };
   
   useTask(() => {
     
     // Always update camera position to follow player (even in START/GAMEOVER)
-    cameraPosition.target = {
-      x: gameState.playerX,
-      y: 5,
-      z: 10 + gameState.playerZ
-    };
+    _camTarget.x = gameState.playerX;
+    _camTarget.z = 10 + gameState.playerZ;
+    cameraPosition.target = _camTarget;
     
     // Update look-at target slightly ahead of player
-    lookAtPosition.target = {
-      x: gameState.playerX,
-      y: 1,
-      z: -4 + gameState.playerZ
-    };
+    _lookTarget.x = gameState.playerX;
+    _lookTarget.z = -4 + gameState.playerZ;
+    lookAtPosition.target = _lookTarget;
     
     // Add subtle roll based on velocity (only during gameplay)
     if (gameState.state === 'PLAYING') {

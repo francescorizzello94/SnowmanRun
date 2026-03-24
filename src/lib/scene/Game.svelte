@@ -3,7 +3,7 @@
    * Root Game Component
    * Initializes SSR-safe game state context for all child components
    */
-  import { createGameState } from '$lib/game';
+  import { createGameState, createQualityContext } from '$lib/game';
   import GameScene from './GameScene.svelte';
   import StartOverlay from '$lib/ui/StartOverlay.svelte';
   import HUD from '$lib/ui/HUD.svelte';
@@ -12,6 +12,8 @@
   
   // Initialize context-scoped game state
   createGameState();
+  // Initialize quality detection (consumed by scene components via getQualityContext())
+  createQualityContext();
 </script>
 
 <div class="game-container">
