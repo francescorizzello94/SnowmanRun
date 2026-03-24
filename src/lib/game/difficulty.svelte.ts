@@ -16,20 +16,20 @@ export class DifficultyManager {
 
 	/**
 	 * Returns difficulty-specific bounds for spawn interval and speed scaling
-	 * 
+	 *
 	 * Design Principle: "Anchored Presets" — each difficulty maintains its identity
 	 * throughout the session. EASY never escalates into HARD territory, preventing
 	 * frustration from unexpected difficulty spikes.
-	 * 
+	 *
 	 * Implementation: Each preset has independent initial and target values. The
 	 * curve is applied via linear interpolation over DIFFICULTY_RAMP_TIME (60s).
-	 * 
+	 *
 	 * Tuning Notes:
 	 * - Spawn intervals: Lower = more frequent obstacles
 	 * - Speed ranges: Higher = faster-moving obstacles
 	 * - EASY caps at 14.5 speed while INSANE reaches 28.5 (nearly 2× faster)
 	 * - EASY min spawn interval (0.95s) is slower than HARD initial (1.25s)
-	 * 
+	 *
 	 * @param preset - The difficulty level (EASY/NORMAL/HARD/INSANE)
 	 * @returns Bounds object with spawn and speed ranges
 	 */

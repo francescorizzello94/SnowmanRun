@@ -80,7 +80,7 @@ const PRESETS: Record<QualityTier, QualitySettings> = {
 		fresnelShader: false,
 		badgeSprites: false,
 		rimLight: false,
-		snowballDetail: 2,
+		snowballDetail: 2
 	},
 	MEDIUM: {
 		shadowMapSize: 512,
@@ -100,7 +100,7 @@ const PRESETS: Record<QualityTier, QualitySettings> = {
 		fresnelShader: false,
 		badgeSprites: true,
 		rimLight: false,
-		snowballDetail: 3,
+		snowballDetail: 3
 	},
 	HIGH: {
 		shadowMapSize: 1024,
@@ -120,8 +120,8 @@ const PRESETS: Record<QualityTier, QualitySettings> = {
 		fresnelShader: true,
 		badgeSprites: true,
 		rimLight: true,
-		snowballDetail: 4,
-	},
+		snowballDetail: 4
+	}
 };
 
 /**

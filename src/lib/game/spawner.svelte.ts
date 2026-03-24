@@ -80,15 +80,31 @@ export class SnowballSpawner {
 
 	// Reusable spawn options object — zero per-lane allocation
 	private readonly _spawnOpts: {
-		profile: SnowballProfile; baseX: number; speedMul: number;
-		collisionRadiusMul: number; wobbleMul: number; hopMul: number;
-		vortexAmp: number; vortexFreq: number; vortexPhase: number;
-		fractureZ: number; hasFractured: boolean; seekerLocked: boolean;
+		profile: SnowballProfile;
+		baseX: number;
+		speedMul: number;
+		collisionRadiusMul: number;
+		wobbleMul: number;
+		hopMul: number;
+		vortexAmp: number;
+		vortexFreq: number;
+		vortexPhase: number;
+		fractureZ: number;
+		hasFractured: boolean;
+		seekerLocked: boolean;
 	} = {
-		profile: 'STANDARD', baseX: 0, speedMul: 1,
-		collisionRadiusMul: 1, wobbleMul: 1, hopMul: 1,
-		vortexAmp: 0, vortexFreq: 0, vortexPhase: 0,
-		fractureZ: -12, hasFractured: false, seekerLocked: false
+		profile: 'STANDARD',
+		baseX: 0,
+		speedMul: 1,
+		collisionRadiusMul: 1,
+		wobbleMul: 1,
+		hopMul: 1,
+		vortexAmp: 0,
+		vortexFreq: 0,
+		vortexPhase: 0,
+		fractureZ: -12,
+		hasFractured: false,
+		seekerLocked: false
 	};
 
 	constructor(difficulty: DifficultyManager) {
@@ -252,8 +268,16 @@ export class SnowballSpawner {
 	 */
 	// Reusable params object — zero per-call allocation
 	private readonly _params = {
-		scale: 0, speedMul: 1, collisionRadiusMul: 1, wobbleMul: 1, hopMul: 1,
-		vortexAmp: 0, vortexFreq: 0, vortexPhase: 0, fractureZ: -12, adjustedX: 0
+		scale: 0,
+		speedMul: 1,
+		collisionRadiusMul: 1,
+		wobbleMul: 1,
+		hopMul: 1,
+		vortexAmp: 0,
+		vortexFreq: 0,
+		vortexPhase: 0,
+		fractureZ: -12,
+		adjustedX: 0
 	};
 
 	private applyProfileParams(
@@ -335,7 +359,7 @@ export class SnowballSpawner {
 
 			const rotationY = Math.random() * Math.PI * 2;
 			const geometryVariant = Math.floor(Math.random() * this.GEOMETRY_VARIANTS);
-this._spawnOpts.profile = profile;
+			this._spawnOpts.profile = profile;
 			this._spawnOpts.baseX = params.adjustedX;
 			this._spawnOpts.speedMul = params.speedMul;
 			this._spawnOpts.collisionRadiusMul = params.collisionRadiusMul;
@@ -347,7 +371,14 @@ this._spawnOpts.profile = profile;
 			this._spawnOpts.fractureZ = params.fractureZ;
 			this._spawnOpts.hasFractured = false;
 			this._spawnOpts.seekerLocked = false;
-			gameState.addSnowball(params.adjustedX, z, params.scale, rotationY, geometryVariant, this._spawnOpts);
+			gameState.addSnowball(
+				params.adjustedX,
+				z,
+				params.scale,
+				rotationY,
+				geometryVariant,
+				this._spawnOpts
+			);
 		}
 	}
 
@@ -371,8 +402,10 @@ this._spawnOpts.profile = profile;
 		if (Math.random() < staggerChance) {
 			// Pick two gap lanes, then block everything else (3 snowballs on 5 lanes).
 			// Ensure the gaps don't repeat the previous pattern too often.
-			this._gapWeights[0] = 1.0; this._gapWeights[1] = 1.05;
-			this._gapWeights[2] = 0.85; this._gapWeights[3] = 1.05;
+			this._gapWeights[0] = 1.0;
+			this._gapWeights[1] = 1.05;
+			this._gapWeights[2] = 0.85;
+			this._gapWeights[3] = 1.05;
 			this._gapWeights[4] = 1.0;
 			// Slightly discourage leaving the player's current lane open.
 			this._gapWeights[playerLane] *= 0.7;
