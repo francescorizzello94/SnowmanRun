@@ -62,7 +62,7 @@ const gameState = getGameState();
 useTask((delta) => {
 	// All calculations use delta time
 	gameState.timePlayed += delta;
-	gameState.distanceTraveled += delta * 10;
+	gameState.distanceTraveled += delta * gameState.getForwardSpeed(gameState.timePlayed);
 	snowball.z += speed * delta; // Frame-rate independent
 });
 ```
@@ -91,11 +91,11 @@ const { stop } = useTask((delta) => {
 
 ### Fixed-Size Object Pooling (New)
 
-**Implementation:** Preallocated fixed-size pool for high-frequency entities (see `src/lib/game/state.svelte.ts`). Slots are plain JS objects with `active: boolean` toggles and numeric defaults. Template invalidation uses a separate `renderTick` counter to avoid proxying the pool into Svelte reactivity.
+**Implementation:** Preallocated fixed-size pool for high-frequency entities (see `src/lib/game/state.svelte.ts`). Slots are plain JS objects with `active: boolean` toggles and numeric defaults. Active slots are written into shared instanced meshes each frame.
 
 ```text
 MAX_SNOWBALLS = 100
-pool = Array(MAX_SNOWBALLS).fill(slot)
+pool = preallocated fixed-size array of slots
 slot.active = true/false
 ```
 
@@ -108,7 +108,7 @@ slot.active = true/false
 **Guidelines:**
 
 - Capture any parent slot fields before deactivating a slot if those fields are needed for immediate follow-up (e.g., fragment spawning).
-- Use a `renderTick` (low-frequency, e.g., 30Hz) to drive Svelte template updates; do not wrap the pool in `$state` proxies.
+- Keep pool objects non-reactive and mutate slot fields directly in the frame loop.
 
 ### Bottleneck Mitigation ✓
 
@@ -151,7 +151,6 @@ class GameStateManager {
 
 	// NON-REACTIVE ENGINE STATE (raw) - high-frequency
 	playerX: number = 0;
-	targetX: number = 0;
 	playerVelocityX: number = 0;
 	snowballs: Snowball[] = [];
 }
