@@ -13,8 +13,8 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 ### Camera
 
 - **Third-person follow camera** with smooth spring interpolation
-- Position: `{ x: playerX, y: 5.2, z: 10.5 }`
-- Look-at target: `{ x: playerX, y: 0.8, z: -6 }` (slightly ahead for visibility)
+- Position target: `{ x: playerX, y: 5, z: 10 + playerZ }`
+- Look-at target: `{ x: playerX, y: 1, z: -4 + playerZ }` (tracks dash offset)
 - Dynamic roll based on velocity for kinetic feedback
 
 ### Environment ("Snowy Void")
@@ -23,13 +23,17 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 - **Procedurally displaced snow ground** (80×150 PlaneGeometry segments)
   - Multi-octave noise for natural drifts
   - Real-time trail deformation system (Gaussian stamping with asymmetric berms)
-- **PCFSoftShadowMap** rendering at 2048×2048 resolution
+- **Quality-tier shadow pipeline**
+  - LOW: shadows disabled
+  - MEDIUM: 512 map, BasicShadowMap
+  - HIGH: 1024 map, PCFSoftShadowMap
   - Tight directional light frustum for crisp shadows
   - Player model auto-grounded via Box3 bounds calculation
 - **Lighting:**
-  - Ambient (0.5 intensity)
-  - Directional (1.3 intensity, casts shadows)
-  - Rim light (0.35 intensity, blue-tinted)
+  - Hemisphere (0.65 intensity)
+  - Directional (4.8 intensity, casts shadows when enabled)
+  - Ambient fill (0.12 intensity)
+  - Rim directional light (0.75 intensity, HIGH tier only)
 
 ### Visual Effects
 
@@ -51,19 +55,18 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 - GLTF model loaded via Threlte
 - **Auto-grounding system:** Box3 bounds calculation after scale application
 - Shadow casting enabled on all child meshes
-- Visual smoothing (lag factor 0.088) for kinetic feel
+- Visual smoothing via lerp/spring style interpolation (`VISUAL_LERP_SPEED`, `Z_LERP_SPEED`)
 
 ### Movement
 
 - **Horizontal (X-axis):** Keyboard input (A/D, Arrow Keys)
-  - Acceleration: `52 units/s²`
-  - Friction: `0.84` (creates ice-sliding feel)
-  - Bounds: `±6.2` units
-  - Visual tilt: `0.19 rad` based on velocity
+  - Kinematic speed: `12 units/s` (instant response)
+  - Bounds: `±7` units
+  - Visual tilt: `0.08 rad` based on input direction
 - **Vertical (Jump):** Spacebar
-  - Impulse: `4.75` units/s
-  - Cooldown: `0.35s`
-  - Gravity: `9.8 m/s²`
+  - Duration: `0.55s`
+  - Cooldown: `0.55s`
+  - Grace windows: `PRE_GRACE = 0.08s`, `POST_GRACE = 0.08s`
 
 ---
 
@@ -76,7 +79,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
 **Rendering:**
 
 - 3 procedural Voronoi-displaced geometry variants (visual variation)
-- Shared PBR snow material + seeker-specific red emissive variant
+- Shared quality-aware snow material (physical on HIGH, standard otherwise)
 - Scale range: `0.5–1.3` (standard) with archetype-specific multipliers
 
 ### Archetype Catalog
@@ -94,7 +97,7 @@ A polished 3D dodging game emphasizing **high-IQ tactical decision-making** over
   - Predicted target: `playerX + playerVelocityX × leadTime`
   - Exponential smoothing: `α = 1 - e^(-3.6Δt)` for natural steering
   - **Path Lock:** Stops adjusting at Z = -15 (commitment distance)
-- **Visual Tell:** Red emissive material + yaw jitter (±0.12 rad @ 8Hz)
+- **Visual Tell:** Colored elite profile badge sprite above the snowball
 - **Counter:** Bait early, dodge late (exploit lock distance), or jump over
 - **Stats:** Scale 0.95, Speed ×1.05
 - **Frequency:** Scales from 5% (EASY) to 26% (INSANE)
@@ -167,9 +170,9 @@ All curves ramp over **60 seconds** (linear interpolation).
 - **Algorithm:** Squared distance check (performance-optimized)
   - `(dx² + dz²) < (r₁ + r₂)²`
 - **Radii:**
-  - Player: `0.5` units
-  - Standard snowball: `0.6` units
-  - Heavy snowball: `0.6 × 2.1 = 1.26` units
+  - Player: `0.75` units (`1.0 × COLLISION_GRACE`)
+  - Standard snowball: `0.45` units (`0.6 × COLLISION_GRACE`)
+  - Heavy snowball: `0.45 × 2.1 = 0.945` units
 - **Hit-Stop:** 120ms freeze on collision for impact feedback
 
 ### State Machine
@@ -208,8 +211,8 @@ All curves ramp over **60 seconds** (linear interpolation).
 ### Rendering Pipeline
 
 - **Instanced Geometry:** 3 shared Voronoi-displaced buffers
-- **Material Sharing:** 2 materials total (snow + seeker emissive)
-- **Shadow Optimization:** Tight frustum + 2048 resolution
+- **Material Sharing:** one shared snow material across all snowball instances
+- **Shadow Optimization:** Tight frustum + quality-tier shadow map sizes
 - **Fixed Particle Buffer:** 700-particle limit (no per-frame allocations)
 
 ### Physics Loop
@@ -223,7 +226,7 @@ All curves ramp over **60 seconds** (linear interpolation).
 #### Fixed-Size Pooling & Render Invalidation
 
 - Pools: High-frequency entities (snowballs, particles) use preallocated fixed-size pools with `active` toggles. Avoid structural array mutations in the rAF loop.
-- Template invalidation: Drive Svelte updates using a low-frequency `renderTick` (e.g., 30Hz) and `#key renderTick` to re-evaluate the rendering block without proxying the pool array.
+- Instanced render path: active pool slots are written directly into shared `InstancedMesh` matrices each frame.
 - Fracture spawning: Always capture parent slot fields needed for fragment spawn (geometryVariant, scale, baseX, id, z) before deactivating the parent slot to avoid stale data.
 
 Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookkeeping under pool pressure.
@@ -242,7 +245,7 @@ Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookk
 
 - [x] Third-person camera with spring smoothing + dynamic roll
 - [x] Snowman GLTF with auto-grounding + shadow system
-- [x] Ice-sliding physics (acceleration + friction)
+- [x] Kinematic movement model with visual smoothing
 - [x] Jump mechanics with cooldown
 - [x] Procedural snow terrain with real-time trail deformation
 - [x] Kinetic particle system (velocity-scaled emission)
@@ -253,7 +256,7 @@ Benefits: Reduced GC pressure, more stable 60+ FPS, deterministic fragment bookk
 - [x] Heavy boulder with expanded hitbox
 - [x] Difficulty anchoring (per-preset bounded curves)
 - [x] Spawner intelligence (lane caps, probability tables, pattern sequencing)
-- [x] PCFSoftShadowMap rendering (2048 resolution)
+- [x] Quality-tier shadow rendering (LOW/MEDIUM/HIGH)
 - [x] Black void aesthetic (fog + background)
 - [x] Compact HUD with stacked metrics
 - [x] Color-coded Game Over stats
@@ -279,7 +282,7 @@ See [TUNING.md](./TUNING.md) for comprehensive constant reference.
 
 **Key Design Levers:**
 
-- **Gameplay Feel:** Friction/acceleration balance creates "ice skating" physics
+- **Gameplay Feel:** Kinematic move speed, bounds, visual lerp, and tilt tuning
 - **Difficulty Identity:** Per-preset bounds prevent unwanted escalation
 - **AI Sophistication:** Seeker lock distance, oscillation frequency, split timing
 - **Visual Fidelity:** Shadow frustum, particle count, trail update rate

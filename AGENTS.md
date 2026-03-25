@@ -12,7 +12,7 @@ This project uses SvelteKit and Threlte for a frontend-only 3D game.
 
 - Use a preallocated fixed-size object pool for high-frequency entities (e.g. snowballs) to avoid heap allocations in the `requestAnimationFrame` hot path. Allocate slots once at startup (e.g. `MAX_SNOWBALLS = 100`) and reuse by toggling an `active` flag.
 - Do not call `new`, `.push()`, `.splice()`, or return fresh arrays inside the per-frame loop. Mutate the properties of pooled plain objects instead.
-- Keep the pool and pooled objects as plain JS objects (no Svelte `$state` proxies) — read them directly from Threlte render tasks. Use a separate, low-frequency reactive invalidation signal (e.g. `renderTick` at 30Hz) to drive template refresh without proxying the hot-path data.
+- Keep the pool and pooled objects as plain JS objects (no Svelte `$state` proxies) — read them directly from Threlte render tasks and write active slots into shared instanced rendering data each frame.
 - Ensure you capture any parent-slot fields needed for immediate follow-up logic (e.g. fracture fragment spawns) before you reset/deactivate the parent slot.
 
 Why: This pattern eliminates transient allocations that cause V8 GC pauses during animation frames. It also preserves engine performance by keeping high-frequency state non-reactive while still allowing the UI to refresh at controlled intervals.
@@ -27,7 +27,7 @@ Why: This pattern eliminates transient allocations that cause V8 GC pauses durin
 - Keep game state and systems in `/src/lib/game` (state, spawner, collision, difficulty).
 - Keep Threlte scene components in `/src/lib/scene`.
 - Keep UI overlays in `/src/lib/ui`.
-- Maintain a single authoritative per-frame update loop (avoid multiple competing loops).
+- Maintain a single authoritative gameplay update loop for spawning/obstacles/collision; keep other per-frame loops narrowly scoped to visuals, particles, terrain, and camera.
 
 ## Architecture principles
 

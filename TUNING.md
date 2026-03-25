@@ -6,13 +6,18 @@ This document outlines where to find tuning constants for gameplay adjustments.
 
 **Location:** `src/lib/scene/Player.svelte`
 
-- `MAX_X = 6.2` - Maximum left/right movement bounds
-- `ACCELERATION = 52` - How quickly player accelerates
-- `FRICTION = 0.84` - Friction coefficient (lower = more sliding)
-- `VISUAL_LAG = 0.088` - Smoothing factor for visual position
-- `TILT_AMOUNT = 0.19` - Visual tilt when moving
-- `JUMP_IMPULSE = 4.75` - Upward velocity on jump
-- `JUMP_COOLDOWN = 0.35` - Time between jumps (seconds)
+- `MAX_X = 7` - Maximum left/right movement bounds
+- `MOVE_SPEED = 12` - Kinematic horizontal speed (instant response)
+- `VISUAL_LERP_SPEED = 24` - How quickly rendered X follows logical X
+- `TILT_AMOUNT = 0.08` - Visual tilt when moving
+- `Z_LERP_SPEED = 18` - Dash forward smoothing
+
+**Jump timing location:** `src/lib/game/state.svelte.ts` (`tryStartJump()`)
+
+- `JUMP_DURATION = 0.55`
+- `JUMP_COOLDOWN = 0.55`
+- `PRE_GRACE = 0.08`
+- `POST_GRACE = 0.08`
 
 ## Difficulty Scaling (Per-Preset)
 
@@ -110,9 +115,10 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 
 **Location:** `src/lib/game/collision.svelte.ts`
 
-- `SNOWMAN_RADIUS = 0.5` - Player collision radius
-- `SNOWBALL_RADIUS_BASE = 0.6` - Standard snowball radius
-- Heavy snowballs: `radius × 2.1` via profile-specific multiplier
+- `COLLISION_GRACE = 0.75` - Gameplay fairness margin
+- `SNOWMAN_RADIUS = 0.75` - Effective player collision radius (`1.0 × 0.75`)
+- `SNOWBALL_RADIUS = 0.45` - Effective standard snowball radius (`0.6 × 0.75`)
+- Heavy snowballs: `snowball radius × 2.1` via profile-specific multiplier
 
 ## Visual Effects
 
@@ -122,43 +128,47 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 - `BERM_HEIGHT = 0.035` - Pushed-up snow on sides
 - `FADE_SECONDS = 7.5` - Trail lifetime
 - `STAMP_SPACING = 0.18` - Distance between stamps
-- `UPDATE_HZ = 18` - Geometry update rate
+- `UPDATE_HZ = Q.terrainTrailHz` - Geometry update rate (LOW: 0 / MEDIUM: 12 / HIGH: 18)
 - Gaussian deformation with asymmetric berms (direction-aware)
 
 **Location:** `src/lib/scene/SnowSpurt.svelte` (Particles)
 
-- `COUNT = 700` - Fixed particle buffer size
+- `COUNT = Q.snowSpurtCount` - Fixed particle buffer size (LOW: 80 / MEDIUM: 400 / HIGH: 700)
 - `GRAVITY = 9.5` - Downward acceleration
 - Emission rate: `speed × 58` particles/second
 - Two physics behaviors: 72% fluffy powder (low gravity), 28% slushy clumps
-- Additive blending with soft falloff
+- Additive blending on HIGH tier (`Q.snowSpurtAdditive`)
 
 **Location:** `src/lib/scene/Environment.svelte` (Shadows/Lighting)
 
-- `PCFSoftShadowMap` - Smooth shadow edges
-- Shadow map resolution: `2048 × 2048`
+- Shadow type: `PCFSoftShadowMap` on HIGH, `BasicShadowMap` otherwise
+- Shadow map resolution: quality-tier controlled (`Q.shadowMapSize`)
+  - LOW: `0` (disabled)
+  - MEDIUM: `512`
+  - HIGH: `1024`
 - Directional light frustum: `[-12, 12, 16, -16]` (tightened)
 - `shadow.bias = -0.0001` - Prevents acne
 - Fog color: `#000000` (matches background for clean horizon)
 
 **Location:** `src/lib/scene/Snowballs.svelte`
 
-- `CLEANUP_Z = 15` - When to remove passed snowballs
+- `CLEANUP_Z = 1.5` - When to remove passed snowballs
 - `HIT_STOP_DURATION = 0.12` - Freeze duration on collision
-- Seeker visual tell: red emissive material + yaw jitter (±0.12 rad @ 8 Hz)
+- Seeker visual tell: elite profile badge sprites (label + color)
 
 ## Camera
 
 **Location:** `src/lib/scene/Camera.svelte`
 
-- Position: `{ x: playerX, y: 5.2, z: 10.5 }`
-- Look-at target: `{ x: playerX, y: 0.8, z: -6 }`
+- Position target: `{ x: playerX, y: 5, z: 10 + playerZ }`
+- Look-at target: `{ x: playerX, y: 1, z: -4 + playerZ }`
 - Smooth following via Svelte motion springs
 - Dynamic roll based on velocity
 
 ## Tips
 
-- **Gameplay feel:** Adjust FRICTION lower for icier feel, ACCELERATION higher for snappier control
+- **Gameplay feel:** Adjust `MOVE_SPEED`, `MAX_X`, `VISUAL_LERP_SPEED`, and `TILT_AMOUNT` in `Player.svelte`
+- **Jump feel:** Adjust `JUMP_DURATION`, `JUMP_COOLDOWN`, `PRE_GRACE`, and `POST_GRACE` in `state.svelte.ts`
 - **Difficulty curves:** Each preset is independent - modify bounds in `presetCurve()` to change endgame intensity
 - **Lane density:** MAX_BLOCKED_LANES caps simultaneous obstacles (prevents impossible walls)
 - **Profile distribution:** Edit probability tables in `selectProfileByPreset()` for different archetype mixes

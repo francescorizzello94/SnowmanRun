@@ -8,7 +8,7 @@ A polished 3D dodging game built with SvelteKit and Threlte featuring **intellig
 
 - ✅ Third-person camera with smooth spring following and dynamic roll
 - ✅ Player (Snowman GLTF) with horizontal movement + jump mechanics
-- ✅ Ice-sliding physics with acceleration and friction (0.84 coefficient)
+- ✅ Kinematic movement model with visual smoothing
 - ✅ Visual tilt and smoothing for kinetic feel
 - ✅ **5 distinct snowball archetypes** with unique behaviors:
   - **STANDARD:** Straight-line baseline threat
@@ -36,14 +36,15 @@ A polished 3D dodging game built with SvelteKit and Threlte featuring **intellig
   - Velocity-scaled emission (speed × 58 particles/s)
   - Additive blending with soft radial falloff
 - ✅ **PCFSoftShadowMap rendering:**
-  - 2048×2048 shadow maps
+  - Quality-tier shadow maps (LOW: off, MEDIUM: 512, HIGH: 1024)
   - Tight directional light frustum ([-12, 12, 16, -16])
   - Auto-grounding via Box3 bounds calculation
   - Bias tuning prevents shadow acne (-0.0001)
 - ✅ **Multi-light setup:**
-  - Ambient (0.5 intensity)
-  - Directional (1.3, casts shadows)
-  - Rim light (0.35, blue-tinted for edge definition)
+  - Hemisphere (0.65 intensity)
+  - Directional (4.8, casts shadows when enabled)
+  - Ambient fill (0.12)
+  - Rim light (0.75, HIGH tier only)
 - ✅ Smooth camera interpolation with spring physics
 - ✅ Dynamic camera roll based on movement velocity
 
@@ -85,7 +86,7 @@ A polished 3D dodging game built with SvelteKit and Threlte featuring **intellig
   - Intercept calculation: `predictedX = playerX + playerVelocityX × leadTime`
   - Exponential smoothing: `α = 1 - e^(-3.6Δt)`
   - Path lock at Z = -15 (commitment distance)
-  - Visual tell: red emissive material + yaw jitter (±0.12 rad @ 8Hz)
+  - Visual tell: colored elite profile badge sprites above special snowballs
 - ✅ All systems modular with clean separation of concerns
 
 ## 📁 Project Structure
@@ -129,11 +130,11 @@ src/
 
 ### Physics Loop
 
-- **Single authoritative `useTask` loop** in Snowballs.svelte
+- **Authoritative gameplay loop** in Snowballs.svelte (spawning, obstacle simulation, collisions)
 - **Delta-time decoupling:** Frame-rate independent updates
 - **O(1) direct property updates** via object references (no array searches)
 - **Backward iteration** when removing items during loop
-- Handles spawning, archetype behaviors, collision, and cleanup
+- Other `useTask` loops are scoped to visuals/controls (camera, player visuals, terrain, particles)
 
 ### Fixed-Size Pooling & Render Invalidation (Performance)
 
@@ -142,7 +143,7 @@ The runtime now uses a preallocated fixed-size object pool for `snowballs` to el
 - A constant `MAX_SNOWBALLS` defines the pool size; the array is allocated at game start and never structurally mutated during gameplay (no `.push()`, `.splice()`).
 - Each slot is a plain JS `Snowball` object with numeric defaults and `active: boolean`. Slots are reset in-place when deactivated to preserve object shapes and optimize hidden classes.
 - `addSnowball()` acquires an inactive slot and returns the activated slot (or `null` if exhausted). Callers must handle spawn failures deterministically.
-- The renderer's template is invalidated using a separate low-frequency `renderTick` (e.g. 30Hz) and the template is keyed on this tick; the pool objects themselves remain unproxied to avoid Svelte runtime overhead.
+- Active pool slots are written directly into shared `InstancedMesh` transforms each frame; pooled objects remain unproxied to avoid Svelte runtime overhead.
 
 Benefits:
 
@@ -153,24 +154,23 @@ Benefits:
 ### Camera System
 
 - **Smooth following** using Svelte motion springs
-- Position: `{ x: playerX, y: 5.2, z: 10.5 }`
-- Look-at target: `{ x: playerX, y: 0.8, z: -6 }` (slightly ahead for visibility)
+- Position target: `{ x: playerX, y: 5, z: 10 + playerZ }`
+- Look-at target: `{ x: playerX, y: 1, z: -4 + playerZ }`
 - **Dynamic roll:** Calculated from velocity for kinetic feedback
 
 ### Player Controls
 
 - **Input:** A/D and Arrow Keys for horizontal movement, Spacebar for jump
-- **Ice-skating physics:**
-  - `vx += input × accel × dt`
-  - `vx *= friction` (0.84 coefficient)
-  - `x += vx × dt`
-  - Clamped to ±6.2 bounds
-- **Jump mechanics:**
-  - Impulse: 4.75 units/s
-  - Cooldown: 0.35s
-  - Gravity: 9.8 m/s²
-- **Visual smoothing:** Exponential lag (factor 0.088) for kinetic feel
-- **Tilt:** 0.19 rad based on velocity
+- **Kinematic movement:**
+  - `playerX += inputDirection × MOVE_SPEED × dt`
+  - `MOVE_SPEED = 12`
+  - Clamped to ±7 bounds
+- **Jump mechanics (timing window):**
+  - Duration: 0.55s
+  - Cooldown: 0.55s
+  - Grace: pre/post 0.08s
+- **Visual smoothing:** lerp-based follow (`VISUAL_LERP_SPEED = 24`)
+- **Tilt:** 0.08 rad based on input direction
 
 ### Spawning Strategy (Intelligence-Based)
 
@@ -284,7 +284,8 @@ function applyTrail() {
 ### Shadow System
 
 - **PCFSoftShadowMap** for smooth edges (vs. basic hard shadows)
-- **2048×2048 resolution** balances quality and performance
+- **Tiered shadow map type:** PCFSoft on HIGH, Basic on lower tiers
+- **Tiered resolution:** LOW off, MEDIUM 512, HIGH 1024
 - **Tight frustum bounds** ([-12, 12, 16, -16]) eliminates wasted resolution
 - **Auto-grounding algorithm:**
   ```typescript
@@ -325,7 +326,7 @@ return curve.spawnInitial - (curve.spawnInitial - curve.spawnMin) * t;
 ### Rendering
 
 - **Instanced geometry:** 3 shared Voronoi-displaced buffers (visual variation without duplication)
-- **Material sharing:** 2 materials total (snow + seeker emissive)
+- **Material sharing:** one shared snow material for all instanced snowballs
 - **Shadow optimization:** Tight frustum eliminates wasted shadow map resolution
 - **Fixed particle buffer:** Zero per-frame allocations (700 particles pre-allocated)
 - **Lazy geometry creation:** Voronoi displacement computed on-demand
@@ -336,7 +337,7 @@ return curve.spawnInitial - (curve.spawnInitial - curve.spawnMin) * t;
 - **Backward iteration:** Remove items during iteration without index shift issues
 - **Non-reactive state:** High-frequency updates outside Svelte reactivity system
 - **Terrain throttling:** Trail updates at 18Hz (not per-frame)
-- **Early-out checks:** Collision only tested when `ball.z > -3`
+- **Collision windowing:** Collision checks only within player-local Z window
 
 ### Memory Management
 
@@ -368,12 +369,12 @@ return curve.spawnInitial - (curve.spawnInitial - curve.spawnMin) * t;
 - **Color Palette:**
   - Snow: Pure white (#ffffff) with PBR material
   - Void: Absolute black (#000000)
-  - Seeker tell: Red emissive (#ff0000)
+  - Elite tells: profile badge colors (orange/purple/cyan/yellow)
   - UI accents: Archetype-specific (orange/purple/cyan/red)
 - **Material System:**
   - MeshPhysicalMaterial for snow (roughness 0.72, clearcoat 0.7)
-  - Fresnel edge glow via custom shader (unused in current build)
-  - Red emissive variant for Seeker visual tell
+  - Fresnel edge glow via custom shader (HIGH tier)
+  - Badge sprite materials for elite profile indicators
 
 ## 📖 Documentation
 
