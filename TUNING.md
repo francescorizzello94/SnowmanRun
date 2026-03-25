@@ -143,9 +143,9 @@ Each difficulty preset has independent bounds (EASY never ramps into HARD behavi
 
 - Shadow type: `PCFSoftShadowMap` on HIGH, `BasicShadowMap` otherwise
 - Shadow map resolution: quality-tier controlled (`Q.shadowMapSize`)
-	- LOW: `0` (disabled)
-	- MEDIUM: `512`
-	- HIGH: `1024`
+  - LOW: `0` (disabled)
+  - MEDIUM: `512`
+  - HIGH: `1024`
 - Directional light frustum: `[-12, 12, 16, -16]` (tightened)
 - `shadow.bias = -0.0001` - Prevents acne
 - Fog color: `#000000` (matches background for clean horizon)
